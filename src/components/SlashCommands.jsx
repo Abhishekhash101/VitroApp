@@ -24,7 +24,7 @@ const suggestionConfig = {
                 description: 'Big section heading.',
                 icon: <Heading1 size={16} />,
                 command: ({ editor, range }) => {
-                    editor.chain().focus().deleteRange(range).setNode('heading', { level: 1 }).run();
+                    editor.chain().focus().deleteRange(range).setHeading({ level: 1 }).run();
                 },
             },
             {
@@ -32,7 +32,7 @@ const suggestionConfig = {
                 description: 'Medium section heading.',
                 icon: <Heading2 size={16} />,
                 command: ({ editor, range }) => {
-                    editor.chain().focus().deleteRange(range).setNode('heading', { level: 2 }).run();
+                    editor.chain().focus().deleteRange(range).setHeading({ level: 2 }).run();
                 },
             },
             {
@@ -40,7 +40,7 @@ const suggestionConfig = {
                 description: 'Small section heading.',
                 icon: <Heading3 size={16} />,
                 command: ({ editor, range }) => {
-                    editor.chain().focus().deleteRange(range).setNode('heading', { level: 3 }).run();
+                    editor.chain().focus().deleteRange(range).setHeading({ level: 3 }).run();
                 },
             },
             {
@@ -59,7 +59,19 @@ const suggestionConfig = {
                     editor.chain().focus().deleteRange(range).setHorizontalRule().run();
                 },
             },
+            {
+                title: 'Blockquote',
+                description: 'Format as a quotation.',
+                icon: <Type size={16} />,
+                command: ({ editor, range }) => {
+                    editor.chain().focus().deleteRange(range).toggleBlockquote().run();
+                },
+            },
         ].filter(item => item.title.toLowerCase().startsWith(query.toLowerCase())).slice(0, 10);
+    },
+
+    command: ({ editor, range, props }) => {
+        props.command({ editor, range });
     },
 
     render: () => {

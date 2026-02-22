@@ -10,9 +10,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tiptap/extension-blockquote": "^3.20.0",
+    "@tiptap/extension-bubble-menu": "^3.20.0",
+    "@tiptap/extension-bullet-list": "^3.20.0",
     "@tiptap/extension-dropcursor": "^3.20.0",
+    "@tiptap/extension-heading": "^3.20.0",
     "@tiptap/extension-horizontal-rule": "^3.20.0",
     "@tiptap/extension-image": "^3.20.0",
+    "@tiptap/extension-list-item": "^3.20.0",
     "@tiptap/extension-text-align": "^3.20.0",
     "@tiptap/extension-underline": "^3.20.0",
     "@tiptap/react": "^3.20.0",
@@ -28,6 +33,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@tailwindcss/typography": "^0.5.19",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",

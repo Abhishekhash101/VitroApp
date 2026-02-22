@@ -11,6 +11,10 @@ import RightSidebar from './RightSidebar';
 import { useAppContext } from '../context/AppContext';
 import { useEditor, EditorContent, ReactNodeViewRenderer } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import Heading from '@tiptap/extension-heading';
+import BulletList from '@tiptap/extension-bullet-list';
+import ListItem from '@tiptap/extension-list-item';
+import Blockquote from '@tiptap/extension-blockquote';
 import Image from '@tiptap/extension-image';
 import Dropcursor from '@tiptap/extension-dropcursor';
 import TextAlign from '@tiptap/extension-text-align';
@@ -192,6 +196,10 @@ export default function MainWorkspace() {
     const editor = useEditor({
         extensions: [
             StarterKit,
+            Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
+            BulletList,
+            ListItem,
+            Blockquote,
             CustomImage.configure({
                 inline: true,
                 allowBase64: true,
@@ -392,9 +400,9 @@ export default function MainWorkspace() {
                                 </span>
                             </div>
 
-                            {/* Sticky Formatting Toolbar */}
+                            {/* Sticky Formatting Menu (Replacing Failed BubbleMenu) */}
                             {editor && (
-                                <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border border-gray-200 shadow-sm rounded-lg p-1.5 flex flex-wrap items-center gap-1 mb-6">
+                                <div className="sticky top-0 z-40 bg-white shadow-xl border border-gray-200 rounded-lg p-1.5 flex flex-wrap items-center gap-1 mb-6">
                                     <button onClick={() => editor.chain().focus().toggleBold().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('bold') ? 'bg-blue-100 text-blue-700' : ''}`} title="Bold"><Bold size={16} /></button>
                                     <button onClick={() => editor.chain().focus().toggleItalic().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('italic') ? 'bg-blue-100 text-blue-700' : ''}`} title="Italic"><Italic size={16} /></button>
                                     <button onClick={() => editor.chain().focus().toggleUnderline().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('underline') ? 'bg-blue-100 text-blue-700' : ''}`} title="Underline"><UnderlineIcon size={16} /></button>
