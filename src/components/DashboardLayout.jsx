@@ -8,19 +8,7 @@ import NewProjectModal from './NewProjectModal';
 import { FlaskConical } from 'lucide-react';
 
 export default function DashboardLayout() {
-    const [activeFile, setActiveFile] = useState(null);
-
-    // Default selection
-    React.useEffect(() => {
-        setActiveFile({
-            name: 'Abstract_Final_v2.docx',
-            type: 'doc',
-            size: '2.4 MB',
-            created: 'Oct 10, 2023',
-            modified: 'Oct 24, 2023',
-            location: '/Experiments 2023/Thesis',
-        });
-    }, []);
+    const [selectedProject, setSelectedProject] = useState(null);
 
     return (
         <div className="flex h-screen w-full bg-[#F6EFEA] font-sans text-gray-900 overflow-hidden">
@@ -54,13 +42,13 @@ export default function DashboardLayout() {
 
                     {/* Main Content Area */}
                     <div className="flex-1 px-10 py-6 overflow-y-auto">
-                        <QuickAccessGallery />
-                        <FilesTable onSelectFile={setActiveFile} />
+                        <QuickAccessGallery selectedProject={selectedProject} setSelectedProject={setSelectedProject} />
+                        <FilesTable selectedProject={selectedProject} setSelectedProject={setSelectedProject} />
                     </div>
 
                     {/* Properties Panel */}
                     <div className="w-[320px] bg-[#FAF7F5] border-l border-gray-200 shadow-[-4px_0_24px_-10px_rgba(0,0,0,0.05)] overflow-hidden shrink-0 flex flex-col">
-                        <PropertiesPanel file={activeFile} />
+                        <PropertiesPanel project={selectedProject} />
                     </div>
 
                 </div>

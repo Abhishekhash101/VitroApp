@@ -1,11 +1,16 @@
 import React from 'react';
 import { FileText, Plus, MessageSquare } from 'lucide-react';
 
-export default function PropertiesPanel({ file }) {
-    if (!file) {
+import { useNavigate } from 'react-router-dom';
+
+export default function PropertiesPanel({ project }) {
+    const navigate = useNavigate();
+
+    if (!project) {
         return (
-            <div className="p-8 flex items-center justify-center h-full text-gray-400">
-                Select a file to view properties
+            <div className="p-8 flex flex-col items-center justify-center h-full text-center text-gray-400">
+                <FileText size={48} className="text-gray-200 mb-4" strokeWidth={1} />
+                <p className="font-medium">Select a project to view details.</p>
             </div>
         );
     }
@@ -23,9 +28,19 @@ export default function PropertiesPanel({ file }) {
                         <FileText size={36} className="text-blue-500" />
                     </div>
 
-                    <a href="/workspace" className="font-bold text-[#1F2937] text-lg mb-1 relative z-10 hover:underline hover:text-blue-600 transition-colors cursor-pointer">{file.name}</a>
-                    <p className="text-sm text-[#734A54] font-medium relative z-10">Document • {file.size}</p>
+                    <h3 className="font-bold text-[#1F2937] text-lg mb-1 relative z-10 text-center truncate w-full">{project.name}</h3>
+                    <p className="text-sm text-[#734A54] font-medium relative z-10">Document • {project.size}</p>
                 </div>
+            </div>
+
+            {/* Action Button */}
+            <div className="px-6 pb-4">
+                <button
+                    onClick={() => navigate(`/workspace/${project.id}`)}
+                    className="w-full bg-[#B7684C] hover:bg-[#A45C49] text-white py-3 rounded-xl font-bold text-sm shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#B7684C] flex justify-center items-center gap-2"
+                >
+                    Open in Editor
+                </button>
             </div>
 
             <div className="px-6 py-4 flex-1 overflow-y-auto">
@@ -37,20 +52,22 @@ export default function PropertiesPanel({ file }) {
                     <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4 shadow-sm">
                         <div className="flex justify-between items-start">
                             <span className="text-sm text-gray-500 w-1/3">Type</span>
-                            <span className="text-sm text-gray-800 font-medium text-right w-2/3">Word Document</span>
+                            <span className="text-sm text-gray-800 font-medium text-right w-2/3">Vitro Document</span>
                         </div>
                         <div className="flex justify-between items-start">
                             <span className="text-sm text-gray-500 w-1/3">Created</span>
-                            <span className="text-sm text-gray-800 font-medium text-right w-2/3">{file.created || 'Oct 10, 2023'}</span>
+                            <span className="text-sm text-gray-800 font-medium text-right w-2/3">{project.date}</span>
                         </div>
                         <div className="flex justify-between items-start">
-                            <span className="text-sm text-gray-500 w-1/3">Modified</span>
-                            <span className="text-sm text-gray-800 font-medium text-right w-2/3">{file.modified || 'Oct 24, 2023'}</span>
+                            <span className="text-sm text-gray-500 w-1/3">Owner</span>
+                            <span className="text-sm text-gray-800 font-medium text-right w-2/3">{project.owner}</span>
                         </div>
-                        <div className="flex justify-between items-start">
-                            <span className="text-sm text-gray-500 w-1/3">Location</span>
-                            <span className="text-sm text-gray-800 font-medium text-right w-2/3 text-wrap break-words">{file.location || '/Experiments 2023/Thesis'}</span>
-                        </div>
+                        {project.location && (
+                            <div className="flex justify-between items-start">
+                                <span className="text-sm text-gray-500 w-1/3">Location</span>
+                                <span className="text-sm text-gray-800 font-medium text-right w-2/3 text-wrap break-words">{project.location}</span>
+                            </div>
+                        )}
                     </div>
                 </div>
 

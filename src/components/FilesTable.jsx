@@ -1,7 +1,6 @@
 import React from 'react';
 import { FileText, FileSpreadsheet, FileIcon, Folder, Code, Filter, List, Trash2, Import } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
-import { useNavigate } from 'react-router-dom';
 
 const getIcon = (type) => {
     switch (type) {
@@ -14,9 +13,8 @@ const getIcon = (type) => {
     }
 };
 
-export default function FilesTable({ onSelectFile }) {
+export default function FilesTable({ selectedProject, setSelectedProject }) {
     const { projects, deleteProject, setIsNewProjectModalOpen } = useAppContext();
-    const navigate = useNavigate();
     return (
         <div>
             <div className="flex items-center justify-between mb-4">
@@ -71,8 +69,8 @@ export default function FilesTable({ onSelectFile }) {
                         projects.map((file, index) => (
                             <div
                                 key={file.id}
-                                onClick={() => navigate(`/workspace/${file.id}`)}
-                                className={`grid grid-cols-12 gap-4 px-6 py-4 items-center text-sm text-white cursor-pointer transition-colors ${file.selected ? 'bg-black/10' : 'hover:bg-white/5'} ${index !== projects.length - 1 ? 'border-b border-white/10' : ''}`}
+                                onClick={() => setSelectedProject(file)}
+                                className={`grid grid-cols-12 gap-4 px-6 py-4 items-center text-sm text-white cursor-pointer transition-colors ${selectedProject?.id === file.id ? 'bg-black/15 shadow-inner' : 'hover:bg-white/5'} ${index !== projects.length - 1 ? 'border-b border-white/10' : ''}`}
                             >
                                 <div className="col-span-5 flex items-center gap-3 font-medium">
                                     {getIcon(file.type)}

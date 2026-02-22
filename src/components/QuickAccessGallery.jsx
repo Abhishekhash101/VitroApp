@@ -1,11 +1,9 @@
 import React from 'react';
 import { FileText, Grid, Sigma, Image as ImageIcon, MoreVertical, ShieldCheck, Zap } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
-import { useNavigate } from 'react-router-dom';
 
-export default function QuickAccessGallery() {
+export default function QuickAccessGallery({ selectedProject, setSelectedProject }) {
     const { projects } = useAppContext();
-    const navigate = useNavigate();
     return (
         <div className="mb-10">
             <div className="flex items-center gap-2 mb-4 text-gray-800">
@@ -33,8 +31,8 @@ export default function QuickAccessGallery() {
                         return (
                             <div
                                 key={project.id}
-                                onClick={() => navigate(`/workspace/${project.id}`)}
-                                className="min-w-[180px] bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow border border-gray-100 flex flex-col justify-between group cursor-pointer"
+                                onClick={() => setSelectedProject(project)}
+                                className={`min-w-[180px] bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group cursor-pointer ${selectedProject?.id === project.id ? 'ring-2 ring-orange-300 border-orange-200' : 'border border-gray-100'}`}
                             >
                                 <div className="flex justify-between items-start mb-4">
                                     <div className={`p-2.5 rounded-xl bg-orange-100 text-orange-500`}>
