@@ -174,7 +174,7 @@ export default function MainWorkspace() {
         content: '', // Start entirely empty (Phase 3 requirements)
         editorProps: {
             attributes: {
-                class: 'prose prose-lg focus:outline-none max-w-none text-[#444] font-serif leading-relaxed min-h-[120px]',
+                class: 'prose prose-lg focus:outline-none max-w-none text-[#444] font-serif leading-relaxed min-h-[500px]',
                 placeholder: 'Start typing your analysis here...',
             },
         },
@@ -361,47 +361,12 @@ export default function MainWorkspace() {
                                 {activeProject?.owner || 'Owner'}
                             </div>
 
-                            {/* TipTap Image Upload Toolbar */}
-                            <div className="flex items-center gap-2 mb-4 bg-gray-50 border border-gray-200 rounded-lg p-2 max-w-max text-gray-600">
-                                <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-gray-200 px-3 py-1.5 rounded transition-colors">
-                                    <ImageIcon size={16} />
-                                    Insert Image
-                                    <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                                </label>
-                            </div>
-
                             {/* Editor Area */}
-                            <div className="mb-10 min-h-[120px]">
+                            <div className="mb-10 min-h-[500px]">
                                 <EditorContent editor={editor} />
                             </div>
 
-                            {/* Action Bar for Tables & Data */}
-                            <div className="flex justify-between flex-wrap gap-4 items-center mb-6">
-                                <h3 className="text-[#3E2A2F] font-bold text-lg font-serif">Experimental Data</h3>
-                                <label className="flex items-center gap-2 bg-[#62414A] hover:bg-[#53353D] text-white px-4 py-2 rounded-full font-bold text-sm shadow-sm transition-colors cursor-pointer">
-                                    <Upload size={16} />
-                                    Import CSV
-                                    <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
-                                </label>
-                            </div>
-
-                            {chartData.length === 0 ? (
-                                /* Empty State for Graph & Table Content */
-                                <div className="border border-dashed border-[#D8C7B9] bg-[#F4EBE1]/50 rounded-2xl p-16 flex flex-col items-center justify-center text-center">
-                                    <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4 text-[#B7684C]">
-                                        <BarChart2 size={32} />
-                                    </div>
-                                    <h3 className="text-[#3E2A2F] font-bold text-lg mb-2">No Data Available</h3>
-                                    <p className="text-[#3E2A2F]/60 text-sm max-w-sm font-medium mb-6">
-                                        Import a CSV file to automatically generate a data table and dynamic chart visualization.
-                                    </p>
-                                    <label className="bg-white border border-[#D8C7B9] text-[#62414A] hover:bg-gray-50 px-6 py-2.5 rounded-full font-bold text-sm shadow-sm transition-colors cursor-pointer inline-flex items-center gap-2">
-                                        <Upload size={16} />
-                                        Upload CSV Configuration
-                                        <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
-                                    </label>
-                                </div>
-                            ) : (
+                            {chartData.length > 0 && (
                                 <>
                                     {/* Data Table */}
                                     <div className="border border-[#E5D7CC] rounded-xl overflow-hidden mb-12 shadow-sm font-sans">
