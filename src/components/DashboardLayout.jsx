@@ -4,6 +4,7 @@ import TopNavigation from './TopNavigation';
 import QuickAccessGallery from './QuickAccessGallery';
 import FilesTable from './FilesTable';
 import PropertiesPanel from './PropertiesPanel';
+import NewProjectModal from './NewProjectModal';
 import { FlaskConical } from 'lucide-react';
 
 export default function DashboardLayout() {
@@ -65,6 +66,7 @@ export default function DashboardLayout() {
                 </div>
             </div>
 
+            <NewProjectModal />
         </div>
     );
 }

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Settings2, Check } from 'lucide-react';
+import { useAppContext } from '../context/AppContext';
 
 export default function GraphSettingsPanel() {
-    const [biDirectional, setBiDirectional] = useState(true);
+    const { isBidirectionalEnabled, setIsBidirectionalEnabled } = useAppContext();
     const [showGridlines, setShowGridlines] = useState(true);
     const [showErrorBars, setShowErrorBars] = useState(true);
 
@@ -70,10 +71,10 @@ export default function GraphSettingsPanel() {
                         </div>
                     </div>
                     <button
-                        onClick={() => setBiDirectional(!biDirectional)}
-                        className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-colors ${biDirectional ? 'bg-blue-500' : 'bg-white/50 border border-[#3E2A2F]/30'}`}
+                        onClick={() => setIsBidirectionalEnabled(!isBidirectionalEnabled)}
+                        className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-colors ${isBidirectionalEnabled ? 'bg-blue-500' : 'bg-white/50 border border-[#3E2A2F]/30'}`}
                     >
-                        {biDirectional && <Check size={12} className="text-white" strokeWidth={3} />}
+                        {isBidirectionalEnabled && <Check size={12} className="text-white" strokeWidth={3} />}
                     </button>
                 </div>
 

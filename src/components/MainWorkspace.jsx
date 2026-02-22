@@ -1,16 +1,97 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     FlaskConical, ChevronDown, Folder, FileText, BarChart2, Option,
     Settings, Download, Trash2, Cloud, Share, CheckCircle2, Save, Upload,
-    Clock
+    Clock, Image as ImageIcon
 } from 'lucide-react';
 import ShareModal from './ShareModal';
 import ExportPdfModal from './ExportPdfModal';
 import RightSidebar from './RightSidebar';
+import { useAppContext } from '../context/AppContext';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Image from '@tiptap/extension-image';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useParams, useNavigate } from 'react-router-dom';
+import Papa from 'papaparse';
 
 export default function MainWorkspace() {
-    const [isShareModalOpen, setIsShareModalOpen] = React.useState(false);
-    const [isExportModalOpen, setIsExportModalOpen] = React.useState(false);
+    const { projectId } = useParams();
+    const navigate = useNavigate();
+
+    const {
+        projects,
+        isShareModalOpen, setIsShareModalOpen,
+        isExportModalOpen, setIsExportModalOpen,
+        isBidirectionalEnabled
+    } = useAppContext();
+
+    // Start entirely empty (Phase 3 requirements)
+    const [chartData, setChartData] = useState([]);
+
+    // Find the current project meta
+    const activeProject = projects.find(p => p.id === (projectId || ''));
+
+    const handleTableChange = (index, field, value) => {
+        const newData = [...chartData];
+        newData[index] = { ...newData[index], [field]: field === 'outlier' ? value : (parseFloat(value) || 0) };
+        setChartData(newData);
+    };
+
+    const handleDotClick = (data, index) => {
+        if (!isBidirectionalEnabled) return;
+        // Mock Interaction: Increase temp by 2 on click of graph node
+        const newData = [...chartData];
+        newData[index] = { ...newData[index], temp: newData[index].temp + 2 };
+        setChartData(newData);
+    };
+
+    // CSV Parsing Logic
+    const handleFileUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        Papa.parse(file, {
+            header: true,
+            dynamicTyping: true,
+            skipEmptyLines: true,
+            complete: (results) => {
+                const formattedData = results.data.map((row, index) => ({
+                    id: index,
+                    time: parseFloat(row.time || row.Time || index || 0),
+                    temp: parseFloat(row.temp || row.temperature || row.Temperature || row.Temp || 0),
+                    pressure: parseFloat(row.pressure || row.Pressure || 100.0),
+                    outlier: 'No'
+                }));
+                setChartData(formattedData);
+            }
+        });
+    };
+
+    // TipTap Editor Configuration with Image Extension
+    const editor = useEditor({
+        extensions: [StarterKit, Image],
+        content: '', // Start entirely empty (Phase 3 requirements)
+        editorProps: {
+            attributes: {
+                class: 'prose prose-lg focus:outline-none max-w-none text-[#444] font-serif leading-relaxed min-h-[120px]',
+                placeholder: 'Start typing your analysis here...',
+            },
+        },
+    });
+
+    // Image Upload Logic for TipTap
+    const handleImageUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file || !editor) return;
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            const base64 = reader.result;
+            editor.chain().focus().setImage({ src: base64 }).run();
+        };
+        reader.readAsDataURL(file);
+    };
 
     return (
         <div className="h-screen flex flex-col font-sans w-full bg-[#E5D7CC] overflow-hidden">
@@ -118,8 +199,10 @@ export default function MainWorkspace() {
 
                         {/* Top Bar inside Editor */}
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-14">
-                            <div className="text-[10px] font-bold text-gray-400 tracking-[0.15em]">
-                                MY PROJECTS / THESIS CHAPTER 4 / <span className="text-[#3E2A2F] font-extrabold uppercase">QUANTUM_ANALYSIS_V2</span>
+                            <div className="text-[10px] font-bold text-gray-400 tracking-[0.15em] flex items-center gap-2">
+                                <button onClick={() => navigate('/dashboard')} className="hover:text-gray-800 transition-colors">MY PROJECTS</button>
+                                <span>/</span>
+                                <span className="text-[#3E2A2F] font-extrabold uppercase truncate max-w-[200px]">{activeProject?.name || 'Untitled Document'}</span>
                             </div>
 
                             <div className="flex items-center gap-5">
@@ -146,110 +229,148 @@ export default function MainWorkspace() {
                         {/* Document Content */}
                         <div className="mb-14">
                             <h1 className="text-4xl lg:text-[44px] font-serif text-[#111111] font-bold leading-tight mb-4 tracking-tight">
-                                Analysis of Thermodynamic Variance
+                                {activeProject?.name || 'Untitled Analysis'}
                             </h1>
                             <div className="inline-block bg-[#62414A] text-white text-[10px] font-extrabold tracking-widest px-3 py-1.5 rounded uppercase mb-8">
-                                Dr. Sarah Smith
+                                {activeProject?.owner || 'Owner'}
                             </div>
 
-                            <p className="text-[#444] text-lg leading-relaxed mb-10 font-serif">
-                                In this section, we delve into the thermodynamic variance observed in our quantum experiments. The data, meticulously collected and processed, reveals intriguing patterns that challenge conventional models. Our analysis focuses on identifying and interpreting the deviations from expected thermodynamic behavior, particularly in the context of quantum entanglement and superposition. The results suggest a complex interplay of factors influencing the system's energy distribution and entropy, warranting further investigation into the underlying mechanisms.<span className="inline-block w-0.5 h-[1.1em] bg-[#62414A] animate-pulse ml-0.5 align-text-bottom"></span>
-                            </p>
-
-                            {/* Data Table */}
-                            <div className="border border-[#E5D7CC] rounded-xl overflow-hidden mb-12 shadow-sm font-sans">
-                                <table className="w-full text-left text-sm">
-                                    <thead className="bg-[#DFC0A3] text-[#3E2A2F] text-xs uppercase tracking-wider font-bold">
-                                        <tr>
-                                            <th className="px-6 py-4">Time (S)</th>
-                                            <th className="px-6 py-4">Temp (C)</th>
-                                            <th className="px-6 py-4">Pressure (KPA)</th>
-                                            <th className="px-6 py-4">Outlier?</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                        <tr className="bg-white hover:bg-gray-50/50">
-                                            <td className="px-6 py-4 text-gray-600">0.0</td>
-                                            <td className="px-6 py-4 text-gray-600">25.0</td>
-                                            <td className="px-6 py-4 text-gray-600">100.0</td>
-                                            <td className="px-6 py-4 text-gray-600">No</td>
-                                        </tr>
-                                        <tr className="bg-white hover:bg-gray-50/50">
-                                            <td className="px-6 py-4 text-gray-600">1.0</td>
-                                            <td className="px-6 py-4 text-gray-600">25.5</td>
-                                            <td className="px-6 py-4 text-gray-600">100.5</td>
-                                            <td className="px-6 py-4 text-gray-600">No</td>
-                                        </tr>
-                                        <tr className="bg-[#9B594D] text-white font-bold">
-                                            <td className="px-6 py-4">2.0</td>
-                                            <td className="px-6 py-4">35.0</td>
-                                            <td className="px-6 py-4">110.0</td>
-                                            <td className="px-6 py-4">Yes</td>
-                                        </tr>
-                                        <tr className="bg-white hover:bg-gray-50/50">
-                                            <td className="px-6 py-4 text-gray-600">3.0</td>
-                                            <td className="px-6 py-4 text-gray-600">26.0</td>
-                                            <td className="px-6 py-4 text-gray-600">101.0</td>
-                                            <td className="px-6 py-4 text-gray-600">No</td>
-                                        </tr>
-                                        <tr className="bg-white hover:bg-gray-50/50">
-                                            <td className="px-6 py-4 text-gray-600">4.0</td>
-                                            <td className="px-6 py-4 text-gray-600">26.2</td>
-                                            <td className="px-6 py-4 text-gray-600">101.2</td>
-                                            <td className="px-6 py-4 text-gray-600">No</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                            {/* TipTap Image Upload Toolbar */}
+                            <div className="flex items-center gap-2 mb-4 bg-gray-50 border border-gray-200 rounded-lg p-2 max-w-max text-gray-600">
+                                <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-gray-200 px-3 py-1.5 rounded transition-colors">
+                                    <ImageIcon size={16} />
+                                    Insert Image
+                                    <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                                </label>
                             </div>
 
-                            {/* Chart Section */}
-                            <div className="bg-[#EAD4C7] rounded-xl p-8 shadow-inner border border-[#D8C7B9] font-sans">
-                                <h3 className="text-[#3E2A2F] font-bold text-lg mb-8 font-serif">Time vs. Temperature Analysis</h3>
+                            {/* Editor Area */}
+                            <div className="mb-10 min-h-[120px]">
+                                <EditorContent editor={editor} />
+                            </div>
 
-                                {/* SVG Chart Mock */}
-                                <div className="relative w-full h-48 border-b border-l border-[#3E2A2F]/20 pb-4 pl-4 pt-4 pr-4">
+                            {/* Action Bar for Tables & Data */}
+                            <div className="flex justify-between flex-wrap gap-4 items-center mb-6">
+                                <h3 className="text-[#3E2A2F] font-bold text-lg font-serif">Experimental Data</h3>
+                                <label className="flex items-center gap-2 bg-[#62414A] hover:bg-[#53353D] text-white px-4 py-2 rounded-full font-bold text-sm shadow-sm transition-colors cursor-pointer">
+                                    <Upload size={16} />
+                                    Import CSV
+                                    <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
+                                </label>
+                            </div>
 
-                                    {/* Grid Lines */}
-                                    <div className="absolute inset-x-4 top-[20%] border-t border-[#3E2A2F]/10"></div>
-                                    <div className="absolute inset-x-4 top-[50%] border-t border-[#3E2A2F]/10"></div>
-                                    <div className="absolute inset-x-4 top-[80%] border-t border-[#3E2A2F]/10"></div>
-
-                                    <svg className="w-full h-full" viewBox="0 0 400 150" preserveAspectRatio="none">
-                                        <defs>
-                                            <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="0%" stopColor="#62414A" stopOpacity="0.8" />
-                                                <stop offset="100%" stopColor="#62414A" stopOpacity="0" />
-                                            </linearGradient>
-                                        </defs>
-                                        {/* Area under curve */}
-                                        <path d="M 10 120 L 100 115 L 200 20 L 300 110 L 390 108 L 390 150 L 10 150 Z" fill="url(#chartGradient)" />
-                                        {/* The Line */}
-                                        <path d="M 10 120 L 100 115 L 200 20 L 300 110 L 390 108" fill="none" stroke="#3E2A2F" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                                        {/* Data Points */}
-                                        <circle cx="10" cy="120" r="3" fill="#3E2A2F" />
-                                        <circle cx="100" cy="115" r="3" fill="#3E2A2F" />
-                                        {/* Peak Point */}
-                                        <circle cx="200" cy="20" r="4" fill="white" stroke="#3E2A2F" strokeWidth="2" />
-                                        <circle cx="300" cy="110" r="3" fill="#3E2A2F" />
-                                        <circle cx="390" cy="108" r="3" fill="#3E2A2F" />
-                                    </svg>
-
-                                    {/* X Axis Labels */}
-                                    <div className="absolute -bottom-6 left-0 w-full flex justify-between px-4 text-[10px] font-bold text-[#3E2A2F]/50">
-                                        <span>0s</span>
-                                        <span>1s</span>
-                                        <span>2s</span>
-                                        <span>3s</span>
-                                        <span>4s</span>
+                            {chartData.length === 0 ? (
+                                /* Empty State for Graph & Table Content */
+                                <div className="border border-dashed border-[#D8C7B9] bg-[#F4EBE1]/50 rounded-2xl p-16 flex flex-col items-center justify-center text-center">
+                                    <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4 text-[#B7684C]">
+                                        <BarChart2 size={32} />
                                     </div>
+                                    <h3 className="text-[#3E2A2F] font-bold text-lg mb-2">No Data Available</h3>
+                                    <p className="text-[#3E2A2F]/60 text-sm max-w-sm font-medium mb-6">
+                                        Import a CSV file to automatically generate a data table and dynamic chart visualization.
+                                    </p>
+                                    <label className="bg-white border border-[#D8C7B9] text-[#62414A] hover:bg-gray-50 px-6 py-2.5 rounded-full font-bold text-sm shadow-sm transition-colors cursor-pointer inline-flex items-center gap-2">
+                                        <Upload size={16} />
+                                        Upload CSV Configuration
+                                        <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
+                                    </label>
                                 </div>
+                            ) : (
+                                <>
+                                    {/* Data Table */}
+                                    <div className="border border-[#E5D7CC] rounded-xl overflow-hidden mb-12 shadow-sm font-sans">
+                                        <table className="w-full text-left text-sm">
+                                            <thead className="bg-[#DFC0A3] text-[#3E2A2F] text-xs uppercase tracking-wider font-bold">
+                                                <tr>
+                                                    <th className="px-6 py-4">Time (S)</th>
+                                                    <th className="px-6 py-4">Temp (C)</th>
+                                                    <th className="px-6 py-4">Pressure (KPA)</th>
+                                                    <th className="px-6 py-4">Outlier?</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100">
+                                                {chartData.map((row, index) => (
+                                                    <tr key={row.id} className={row.outlier === 'Yes' ? 'bg-[#9B594D] text-white font-bold' : 'bg-white hover:bg-gray-50/50'}>
+                                                        <td className="px-6 py-4">
+                                                            <input
+                                                                type="number"
+                                                                value={row.time}
+                                                                onChange={(e) => handleTableChange(index, 'time', e.target.value)}
+                                                                className={`w-full bg-transparent border-none focus:ring-2 focus:ring-[#864A3D]/40 rounded px-1 outline-none ${row.outlier === 'Yes' ? 'text-white' : 'text-gray-600'}`}
+                                                            />
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            <input
+                                                                type="number"
+                                                                value={row.temp}
+                                                                onChange={(e) => handleTableChange(index, 'temp', e.target.value)}
+                                                                className={`w-full bg-transparent border-none focus:ring-2 focus:ring-[#864A3D]/40 rounded px-1 outline-none ${row.outlier === 'Yes' ? 'text-white' : 'text-gray-600'}`}
+                                                            />
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            <input
+                                                                type="number"
+                                                                value={row.pressure}
+                                                                onChange={(e) => handleTableChange(index, 'pressure', e.target.value)}
+                                                                className={`w-full bg-transparent border-none focus:ring-2 focus:ring-[#864A3D]/40 rounded px-1 outline-none ${row.outlier === 'Yes' ? 'text-white' : 'text-gray-600'}`}
+                                                            />
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            <select
+                                                                value={row.outlier}
+                                                                onChange={(e) => handleTableChange(index, 'outlier', e.target.value)}
+                                                                className={`bg-transparent border-none focus:ring-2 focus:ring-[#864A3D]/40 rounded outline-none cursor-pointer ${row.outlier === 'Yes' ? 'text-white' : 'text-gray-600'}`}
+                                                            >
+                                                                <option value="No" className="text-gray-800">No</option>
+                                                                <option value="Yes" className="text-gray-800">Yes</option>
+                                                            </select>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
 
-                                <div className="flex justify-between mt-10 text-[9px] font-bold text-[#3E2A2F]/40 tracking-widest uppercase">
-                                    <span>Time (S)</span>
-                                    <span>Temp (C)</span>
-                                </div>
+                                    {/* Chart Section */}
+                                    <div className="bg-[#EAD4C7] rounded-xl p-8 shadow-inner border border-[#D8C7B9] font-sans">
+                                        <h3 className="text-[#3E2A2F] font-bold text-lg mb-8 font-serif">Time vs. Temperature Analysis</h3>
 
-                            </div>
+                                        {/* Dynamic Recharts Component */}
+                                        <div className="w-full h-56 pt-4">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#3E2A2F20" />
+                                                    <XAxis dataKey="time" axisLine={{ stroke: '#3E2A2F40' }} tickLine={false} tick={{ fontSize: 10, fill: '#3E2A2F80' }} dy={10} />
+                                                    <YAxis axisLine={{ stroke: '#3E2A2F40' }} tickLine={false} tick={{ fontSize: 10, fill: '#3E2A2F80' }} />
+                                                    <Tooltip
+                                                        contentStyle={{ backgroundColor: '#62414A', color: 'white', borderRadius: '8px', border: 'none', fontSize: '12px' }}
+                                                        itemStyle={{ color: 'white' }}
+                                                    />
+                                                    <Line
+                                                        type="monotone"
+                                                        dataKey="temp"
+                                                        stroke="#3E2A2F"
+                                                        strokeWidth={2.5}
+                                                        dot={{ r: 4, fill: '#3E2A2F', strokeWidth: 0 }}
+                                                        activeDot={{
+                                                            r: 7,
+                                                            fill: '#B7684C',
+                                                            stroke: 'white',
+                                                            strokeWidth: 2,
+                                                            onClick: isBidirectionalEnabled ? (e, payload) => handleDotClick(e, payload.index) : undefined,
+                                                            cursor: isBidirectionalEnabled ? 'pointer' : 'default'
+                                                        }}
+                                                    />
+                                                </LineChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                        <div className="text-center text-[10px] text-gray-400 font-medium italic mt-2">
+                                            {isBidirectionalEnabled ? "Click on a data point to mock a bi-directional drag/edit (+2 Temp)" : "Bi-directional editing is currently disabled in formatting settings."}
+                                        </div>
+
+                                    </div>
+                                </>
+                            )}
 
                         </div>
                     </div>

@@ -1,8 +1,19 @@
 import React from 'react';
 import { FlaskConical } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { useAppContext } from '../context/AppContext';
 import cityscapeVideo from '../assets/login-bg.mp4';
 
 export default function LoginPage() {
+    const { login } = useAppContext();
+    const navigate = useNavigate();
+
+    const handleLogin = (e) => {
+        e.preventDefault();
+        login({ name: "Abhishek Kumar", role: "Researcher" });
+        // Redirecting to Dashboard Layout per user request (or '/workspace')
+        navigate('/dashboard');
+    };
     return (
         <div className="relative min-h-screen w-full flex items-center justify-center overflow-hidden font-sans">
 
@@ -38,9 +49,9 @@ export default function LoginPage() {
                             </div>
                             <div className="flex items-center gap-4">
                                 <span className="text-white/60 text-sm font-medium">Sign up</span>
-                                <a href="/signup" className="px-5 py-2 rounded-full border border-white/20 text-white text-sm font-semibold hover:bg-white/10 transition-colors">
+                                <Link to="/signup" className="px-5 py-2 rounded-full border border-white/20 text-white text-sm font-semibold hover:bg-white/10 transition-colors">
                                     Join us
-                                </a>
+                                </Link>
                             </div>
                         </div>
 
@@ -90,7 +101,7 @@ export default function LoginPage() {
                                 <div className="pt-2">
                                     <button
                                         type="button"
-                                        onClick={() => window.location.href = '/'}
+                                        onClick={handleLogin}
                                         className="w-full bg-[#864A3D] hover:bg-[#68362d] text-white py-3.5 rounded-xl font-bold tracking-wide shadow-md transition-colors focus:outline-none focus:ring-2 focus:ring-[#864A3D]/50 focus:ring-offset-2"
                                     >
                                         Sign In
@@ -120,7 +131,7 @@ export default function LoginPage() {
                             </form>
 
                             <p className="text-center mt-8 text-[13px] text-gray-500 font-semibold">
-                                Don't have an account? <a href="/signup" className="text-[#864A3D] font-bold hover:underline transition-all">Request access</a>
+                                Don't have an account? <Link to="/signup" className="text-[#864A3D] font-bold hover:underline transition-all">Request access</Link>
                             </p>
 
                         </div>
