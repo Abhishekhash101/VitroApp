@@ -4,7 +4,8 @@ import {
     Settings, Download, Trash2, Cloud, Share, CheckCircle2, Save, Upload,
     Clock, Image as ImageIcon, Bold, Italic, Underline as UnderlineIcon, Strikethrough,
     Heading1, Heading2, List, ListOrdered, Quote,
-    Subscript as SubscriptIcon, Superscript as SuperscriptIcon
+    Subscript as SubscriptIcon, Superscript as SuperscriptIcon,
+    MessageSquarePlus
 } from 'lucide-react';
 import ShareModal from './ShareModal';
 import ExportPdfModal from './ExportPdfModal';
@@ -88,7 +89,8 @@ export default function MainWorkspace() {
         addFileToProject,
         isShareModalOpen, setIsShareModalOpen,
         isExportModalOpen, setIsExportModalOpen,
-        isBidirectionalEnabled
+        isBidirectionalEnabled,
+        setActiveRightPanel
     } = useAppContext();
 
     // Start entirely empty (Phase 3 requirements)
@@ -104,6 +106,11 @@ export default function MainWorkspace() {
     const [activeColor, setActiveColor] = useState('#000000');
 
     const [isSymbolPickerOpen, setIsSymbolPickerOpen] = useState(false);
+    const [comments, setComments] = useState([]);
+
+    // Spatial Commenting (Phase 15)
+    const [isCommentMode, setIsCommentMode] = useState(false);
+    const [draftComment, setDraftComment] = useState(null);
 
     useEffect(() => {
         const handleOpen = () => setIsSymbolPickerOpen(true);
@@ -126,6 +133,16 @@ export default function MainWorkspace() {
         const newData = [...chartData];
         newData[index] = { ...newData[index], temp: newData[index].temp + 2 };
         setChartData(newData);
+    };
+
+    const handleCanvasClick = (e) => {
+        if (!isCommentMode) return;
+        // Get coordinates relative to the nearest bounding parent wrapper
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        setDraftComment({ x, y, text: '' });
+        setIsCommentMode(false); // Turn off mode immediately to allow typing
     };
 
     const handleWorkbenchImport = (e) => {
@@ -455,16 +472,28 @@ export default function MainWorkspace() {
                                 </div>
 
                                 <button
+                                    onClick={() => setIsCommentMode(!isCommentMode)}
+                                    className={`px-5 py-2 rounded-full font-bold text-sm shadow-sm transition-colors border-2 flex items-center gap-2 ${isCommentMode ? 'bg-yellow-100 border-yellow-400 text-yellow-800' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                                    title={isCommentMode ? "Click anywhere on the document to drop a pin" : "Add Comment"}
+                                >
+                                    <MessageSquarePlus size={16} />
+                                    {isCommentMode ? 'Cancel' : 'Comment'}
+                                </button>
+
+                                <button
                                     onClick={() => setIsShareModalOpen(true)}
-                                    className="bg-[#B7684C] hover:bg-[#A45C49] text-white px-5 py-2 rounded-full font-bold text-sm shadow-sm transition-colors"
+                                    className="bg-[#B7684C] hover:bg-[#A45C49] text-white px-5 py-2 rounded-full font-bold text-sm shadow-sm transition-colors border-2 border-transparent"
                                 >
                                     Share
                                 </button>
                             </div>
                         </div>
 
-                        {/* Document Content */}
-                        <div className="mb-14">
+                        {/* Document Content - Spatial Canvas Wrapper */}
+                        <div
+                            className={`mb-14 relative ${isCommentMode ? 'cursor-crosshair' : ''}`}
+                            onClick={handleCanvasClick}
+                        >
                             <h1 className="text-4xl lg:text-[44px] font-serif text-[#111111] font-bold leading-tight mb-4 tracking-tight">
                                 {activeProject?.name || 'Untitled Analysis'}
                             </h1>
@@ -681,13 +710,78 @@ export default function MainWorkspace() {
                                 </>
                             )}
 
+                            {/* Spatial Comment Overlay Rendering */}
+                            {comments.map((comment) => {
+                                if (comment.resolved || comment.x === undefined) return null;
+                                return (
+                                    <div
+                                        key={comment.id}
+                                        style={{ position: 'absolute', left: comment.x, top: comment.y, transform: 'translate(-50%, -50%)' }}
+                                        className="z-50 group cursor-pointer"
+                                        onClick={(e) => { e.stopPropagation(); setActiveRightPanel('comments'); }}
+                                        title={comment.author?.name}
+                                    >
+                                        <div className="w-8 h-8 rounded-full bg-yellow-400 text-white flex items-center justify-center shadow-lg border-2 border-white group-hover:bg-yellow-500 transition-colors">
+                                            <MessageSquarePlus size={14} />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+
+                            {draftComment && (
+                                <div
+                                    style={{ position: 'absolute', left: draftComment.x, top: draftComment.y, transform: 'translate(0, 0)' }}
+                                    className="z-50 bg-white shadow-2xl rounded-xl border border-gray-200 p-4 w-64 animate-in fade-in zoom-in duration-200"
+                                    onClick={(e) => e.stopPropagation()} /* Prevent closing clicking inside */
+                                >
+                                    <textarea
+                                        className="w-full text-sm p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400/50 resize-none min-h-[60px] text-gray-800"
+                                        placeholder="Add a comment..."
+                                        value={draftComment.text}
+                                        onChange={(e) => setDraftComment({ ...draftComment, text: e.target.value })}
+                                        autoFocus
+                                    />
+                                    <div className="flex justify-end gap-2 mt-3">
+                                        <button
+                                            onClick={() => setDraftComment(null)}
+                                            className="px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-lg"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                if (!draftComment.text.trim()) return;
+                                                const newId = Date.now().toString();
+                                                setComments(prev => [
+                                                    ...prev,
+                                                    {
+                                                        id: newId,
+                                                        x: draftComment.x,
+                                                        y: draftComment.y,
+                                                        text: draftComment.text,
+                                                        author: { name: user?.name, avatarUrl: user?.avatarUrl },
+                                                        createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                                                        resolved: false
+                                                    }
+                                                ]);
+                                                setDraftComment(null);
+                                                setActiveRightPanel('comments');
+                                            }}
+                                            className="px-3 py-1.5 text-xs font-bold bg-yellow-400 text-white rounded-lg hover:bg-yellow-500"
+                                        >
+                                            Post
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
                         </div>
                     </div>
 
                 </div>
 
                 {/* Column 3: Dynamic Right Sidebar */}
-                <RightSidebar />
+                <RightSidebar comments={comments} setComments={setComments} editor={editor} user={user} />
 
             </div>
 
