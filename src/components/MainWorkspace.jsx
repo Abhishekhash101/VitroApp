@@ -21,6 +21,7 @@ export default function MainWorkspace() {
 
     const {
         projects,
+        addFileToProject,
         isShareModalOpen, setIsShareModalOpen,
         isExportModalOpen, setIsExportModalOpen,
         isBidirectionalEnabled
@@ -66,6 +67,105 @@ export default function MainWorkspace() {
                 setChartData(formattedData);
             }
         });
+    };
+
+    const handleWorkbenchImport = (e) => {
+        const files = Array.from(e.target.files);
+        if (!files.length || !activeProject) return;
+
+        files.forEach(file => {
+            const isImage = file.type.startsWith('image/');
+            const reader = new FileReader();
+
+            reader.onload = () => {
+                const fileObject = {
+                    id: Date.now().toString() + Math.random().toString(36).substring(7),
+                    name: file.name,
+                    type: file.type,
+                    data: reader.result
+                };
+                addFileToProject(activeProject.id, fileObject);
+            };
+
+            if (isImage) {
+                reader.readAsDataURL(file);
+            } else {
+                reader.readAsText(file);
+            }
+        });
+    };
+
+    const handleDragStart = (e, fileObject) => {
+        e.dataTransfer.setData('application/json', JSON.stringify(fileObject));
+        e.dataTransfer.effectAllowed = 'copy';
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+
+        // Handle OS file drops
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            const file = e.dataTransfer.files[0];
+            const isImage = file.type.startsWith('image/');
+            const reader = new FileReader();
+
+            reader.onload = () => {
+                if (isImage && editor) {
+                    editor.chain().focus().setImage({ src: reader.result }).run();
+                } else if (file.name.endsWith('.csv') || file.type === 'text/csv' || file.name.endsWith('.txt')) {
+                    Papa.parse(reader.result, {
+                        header: true,
+                        dynamicTyping: true,
+                        skipEmptyLines: true,
+                        complete: (results) => {
+                            const formattedData = results.data.map((row, index) => ({
+                                id: index,
+                                time: parseFloat(row.time || row.Time || index || 0),
+                                temp: parseFloat(row.temp || row.temperature || row.Temperature || row.Temp || 0),
+                                pressure: parseFloat(row.pressure || row.Pressure || 100.0),
+                                outlier: 'No'
+                            }));
+                            setChartData(formattedData);
+                        }
+                    });
+                }
+            };
+            if (isImage) {
+                reader.readAsDataURL(file);
+            } else {
+                reader.readAsText(file);
+            }
+            return;
+        }
+
+        // Handle internal workbench drop
+        try {
+            const data = e.dataTransfer.getData('application/json');
+            if (!data) return;
+            const fileObject = JSON.parse(data);
+
+            if (fileObject.type.startsWith('image/') && editor) {
+                editor.chain().focus().setImage({ src: fileObject.data }).run();
+            } else if (fileObject.name.endsWith('.csv') || fileObject.type === 'text/csv' || fileObject.name.endsWith('.txt')) {
+                Papa.parse(fileObject.data, {
+                    header: true,
+                    dynamicTyping: true,
+                    skipEmptyLines: true,
+                    complete: (results) => {
+                        const formattedData = results.data.map((row, index) => ({
+                            id: index,
+                            time: parseFloat(row.time || row.Time || index || 0),
+                            temp: parseFloat(row.temp || row.temperature || row.Temperature || row.Temp || 0),
+                            pressure: parseFloat(row.pressure || row.Pressure || 100.0),
+                            outlier: 'No'
+                        }));
+                        setChartData(formattedData);
+                    }
+                });
+            }
+        } catch (err) {
+            console.error("Drop error", err);
+        }
     };
 
     // TipTap Editor Configuration with Image Extension
@@ -144,29 +244,37 @@ export default function MainWorkspace() {
                         {/* File Tree */}
                         <div className="space-y-3">
 
-                            <div className="flex justify-between items-center bg-[#F4EBE1]/90 rounded-xl px-4 py-3 shadow-sm cursor-pointer">
-                                <div className="flex items-center gap-3 text-[#3E2A2F] font-semibold text-sm">
-                                    <Folder size={18} className="text-[#B7684C]" fill="currentColor" />
-                                    Experiments 2026
+                            <div className="flex justify-between items-center bg-[#F4EBE1]/90 rounded-xl px-4 py-3 shadow-sm cursor-pointer border border-[#D8C7B9]/50">
+                                <div className="flex items-center gap-3 text-[#3E2A2F] font-semibold text-sm truncate pr-2">
+                                    <Folder size={18} className="text-[#B7684C] shrink-0" fill="currentColor" />
+                                    <span className="truncate">{activeProject?.name || 'Untitled Project'}</span>
                                 </div>
-                                <ChevronDown size={16} className="text-[#3E2A2F]" />
+                                <ChevronDown size={16} className="text-[#3E2A2F] shrink-0" />
                             </div>
 
                             <div className="pl-4 space-y-3">
-                                <div className="flex items-center gap-3 bg-white/95 rounded-xl px-4 py-3 shadow-sm cursor-pointer hover:bg-white transition-colors">
-                                    <FileText size={18} className="text-gray-400" />
-                                    <span className="text-[#3E2A2F] font-medium text-sm">Abstract.docx</span>
+                                <div className="flex items-center gap-3 bg-white/95 rounded-xl px-4 py-3 shadow-sm cursor-pointer hover:bg-white transition-colors border-l-4 border-[#B7684C]">
+                                    <FileText size={18} className="text-[#B7684C] shrink-0" />
+                                    <span className="text-[#3E2A2F] font-bold text-sm truncate">{activeProject?.name || 'Untitled'}.docx</span>
                                 </div>
 
-                                <div className="flex items-center gap-3 bg-white/95 rounded-xl px-4 py-3 shadow-sm cursor-pointer hover:bg-white transition-colors">
-                                    <BarChart2 size={18} className="text-gray-400" />
-                                    <span className="text-[#3E2A2F] font-medium text-sm">Raw_Data_Set_1.csv</span>
-                                </div>
+                                {activeProject?.files?.map((f) => (
+                                    <div
+                                        key={f.id}
+                                        draggable="true"
+                                        onDragStart={(e) => handleDragStart(e, f)}
+                                        className="flex items-center gap-3 bg-white/95 rounded-xl px-4 py-3 shadow-sm cursor-grab hover:bg-white transition-colors border border-transparent hover:border-blue-200/50"
+                                    >
+                                        {f.type.startsWith('image/') ? <ImageIcon size={18} className="text-blue-400 shrink-0" /> : <BarChart2 size={18} className="text-emerald-500 shrink-0" />}
+                                        <span className="text-[#3E2A2F] font-medium text-sm truncate" title={f.name}>{f.name}</span>
+                                    </div>
+                                ))}
 
-                                <div className="flex items-center gap-3 bg-[#B7684C] rounded-xl px-4 py-3 shadow-md cursor-pointer">
-                                    <FileText size={18} className="text-white" />
-                                    <span className="text-white font-bold text-sm">Final_Report.tex</span>
-                                </div>
+                                <label className="flex items-center justify-center gap-2 bg-transparent border-2 border-dashed border-white/30 rounded-xl px-4 py-3 cursor-pointer hover:bg-white/10 transition-colors text-white/90 font-medium text-sm mt-4">
+                                    <Upload size={16} />
+                                    + Import File
+                                    <input type="file" multiple accept=".csv, .jpg, .png, .pdf, .svg" className="hidden" onChange={handleWorkbenchImport} />
+                                </label>
                             </div>
 
                         </div>
@@ -193,7 +301,11 @@ export default function MainWorkspace() {
                 </div>
 
                 {/* Column 2: Center Editor */}
-                <div className="flex-1 bg-white my-4 lg:my-6 rounded-3xl shadow-lg border border-gray-100 overflow-y-auto z-0 flex flex-col">
+                <div
+                    className="flex-1 bg-white my-4 lg:my-6 rounded-3xl shadow-lg border border-gray-100 overflow-y-auto z-0 flex flex-col transition-all duration-200"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={handleDrop}
+                >
 
                     <div className="max-w-[800px] w-full mx-auto px-8 lg:px-12 py-10">
 
@@ -212,9 +324,23 @@ export default function MainWorkspace() {
                                 </div>
 
                                 <div className="flex items-center">
-                                    <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="Collab 1" className="w-8 h-8 rounded-full border-2 border-white relative z-20 object-cover" />
-                                    <img src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="Collab 2" className="w-8 h-8 rounded-full border-2 border-white -ml-3 relative z-10 object-cover" />
-                                    <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="Collab 3" className="w-8 h-8 rounded-full border-2 border-white -ml-3 relative z-0 object-cover bg-[#E5D7CC]" />
+                                    {activeProject?.collaborators?.length > 0 ? (
+                                        <>
+                                            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="Current User" className="w-8 h-8 rounded-full border-2 border-white relative z-20 object-cover" title="You" />
+                                            {activeProject.collaborators.map((collab, i) => (
+                                                <img
+                                                    key={i}
+                                                    src={collab.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(collab.name)}&background=random`}
+                                                    alt={collab.name}
+                                                    className="w-8 h-8 rounded-full border-2 border-white -ml-3 relative object-cover"
+                                                    style={{ zIndex: 10 - i }}
+                                                    title={collab.name}
+                                                />
+                                            ))}
+                                        </>
+                                    ) : (
+                                        <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="Current User" className="w-8 h-8 rounded-full border-2 border-white relative z-20 object-cover" title="You" />
+                                    )}
                                 </div>
 
                                 <button

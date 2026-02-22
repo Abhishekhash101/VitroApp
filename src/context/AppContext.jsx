@@ -26,7 +26,9 @@ export function AppContextProvider({ children }) {
             size: '0 KB',
             type: 'folder',
             status: 'green',
-            selected: false
+            selected: false,
+            files: [],
+            collaborators: []
         };
         setProjects(prev => [...prev, newProject]);
         return newProject.id;
@@ -34,6 +36,15 @@ export function AppContextProvider({ children }) {
 
     const deleteProject = (projectId) => {
         setProjects(prev => prev.filter(p => p.id !== projectId));
+    };
+
+    const addFileToProject = (projectId, fileObject) => {
+        setProjects(prev => prev.map(p => {
+            if (p.id === projectId) {
+                return { ...p, files: [...p.files, fileObject] };
+            }
+            return p;
+        }));
     };
 
     // 4. Modal and Panel States
@@ -53,6 +64,7 @@ export function AppContextProvider({ children }) {
             projects,
             createNewProject,
             deleteProject,
+            addFileToProject,
             isNewProjectModalOpen,
             setIsNewProjectModalOpen,
             isShareModalOpen,
