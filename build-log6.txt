@@ -1,0 +1,25 @@
+[36mvite v7.3.1 [32mbuilding client environment for production...[36m[39m
+transforming...
+[32m✓[39m 2515 modules transformed.
+[31m✗[39m Build failed in 16.81s
+[31merror during build:
+[31msrc/components/MainWorkspace.jsx (25:7): "default" is not exported by "node_modules/@tiptap/extension-text-style/dist/index.js", imported by "src/components/MainWorkspace.jsx".[31m
+file: [36mC:/Users/abhis/OneDrive/Desktop/VitroWorkspace/vitro-ui/src/components/MainWorkspace.jsx:25:7[31m
+[33m
+23: import Underline from '@tiptap/extension-underline';
+24: import { Color } from '@tiptap/extension-color';
+25: import TextStyle from '@tiptap/extension-text-style';
+           ^
+26: import FontFamily from '@tiptap/extension-font-family';
+27: import Subscript from '@tiptap/extension-subscript';
+[31m
+    at getRollupError (file:///C:/Users/abhis/OneDrive/Desktop/VitroWorkspace/vitro-ui/node_modules/rollup/dist/es/shared/parseAst.js:402:41)
+    at error (file:///C:/Users/abhis/OneDrive/Desktop/VitroWorkspace/vitro-ui/node_modules/rollup/dist/es/shared/parseAst.js:398:42)
+    at Module.error (file:///C:/Users/abhis/OneDrive/Desktop/VitroWorkspace/vitro-ui/node_modules/rollup/dist/es/shared/node-entry.js:17040:16)
+    at Module.traceVariable (file:///C:/Users/abhis/OneDrive/Desktop/VitroWorkspace/vitro-ui/node_modules/rollup/dist/es/shared/node-entry.js:17452:29)
+    at ModuleScope.findVariable (file:///C:/Users/abhis/OneDrive/Desktop/VitroWorkspace/vitro-ui/node_modules/rollup/dist/es/shared/node-entry.js:15070:39)
+    at FunctionScope.findVariable (file:///C:/Users/abhis/OneDrive/Desktop/VitroWorkspace/vitro-ui/node_modules/rollup/dist/es/shared/node-entry.js:5673:38)
+    at FunctionBodyScope.findVariable (file:///C:/Users/abhis/OneDrive/Desktop/VitroWorkspace/vitro-ui/node_modules/rollup/dist/es/shared/node-entry.js:5673:38)
+    at Identifier.bind (file:///C:/Users/abhis/OneDrive/Desktop/VitroWorkspace/vitro-ui/node_modules/rollup/dist/es/shared/node-entry.js:5447:40)
+    at ArrayExpression.bind (file:///C:/Users/abhis/OneDrive/Desktop/VitroWorkspace/vitro-ui/node_modules/rollup/dist/es/shared/node-entry.js:2825:28)
+    at Property.bind (file:///C:/Users/abhis/OneDrive/Desktop/VitroWorkspace/vitro-ui/node_modules/rollup/dist/es/shared/node-entry.js:2829:23)[39m

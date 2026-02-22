@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     FlaskConical, ChevronDown, Folder, FileText, BarChart2, Option,
     Settings, Download, Trash2, Cloud, Share, CheckCircle2, Save, Upload,
     Clock, Image as ImageIcon, Bold, Italic, Underline as UnderlineIcon, Strikethrough,
-    Heading1, Heading2, List, ListOrdered, Quote
+    Heading1, Heading2, List, ListOrdered, Quote,
+    Subscript as SubscriptIcon, Superscript as SuperscriptIcon
 } from 'lucide-react';
 import ShareModal from './ShareModal';
 import ExportPdfModal from './ExportPdfModal';
 import RightSidebar from './RightSidebar';
 import { useAppContext } from '../context/AppContext';
-import { useEditor, EditorContent, ReactNodeViewRenderer } from '@tiptap/react';
+import { useEditor, EditorContent, ReactNodeViewRenderer, Extension } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Heading from '@tiptap/extension-heading';
 import BulletList from '@tiptap/extension-bullet-list';
@@ -20,9 +21,40 @@ import Dropcursor from '@tiptap/extension-dropcursor';
 import TextAlign from '@tiptap/extension-text-align';
 import HorizontalRule from '@tiptap/extension-horizontal-rule';
 import Underline from '@tiptap/extension-underline';
+import { Color } from '@tiptap/extension-color';
+import { TextStyle } from '@tiptap/extension-text-style';
+import { FontFamily } from '@tiptap/extension-font-family';
+import { Subscript } from '@tiptap/extension-subscript';
+import { Superscript } from '@tiptap/extension-superscript';
 import ResizableImageNode from './ResizableImageNode';
 import { SlashCommands } from './SlashCommands';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+const FontSize = Extension.create({
+    name: 'fontSize',
+    addOptions() { return { types: ['textStyle'] } },
+    addGlobalAttributes() {
+        return [{
+            types: this.options.types,
+            attributes: {
+                fontSize: {
+                    default: null,
+                    parseHTML: element => element.style.fontSize?.replace(/['"]+/g, ''),
+                    renderHTML: attributes => {
+                        if (!attributes.fontSize) return {};
+                        return { style: `font-size: ${attributes.fontSize}` };
+                    },
+                },
+            },
+        }];
+    },
+    addCommands() {
+        return {
+            setFontSize: fontSize => ({ chain }) => chain().setMark('textStyle', { fontSize }).run(),
+            unsetFontSize: () => ({ chain }) => chain().setMark('textStyle', { fontSize: null }).removeEmptyTextStyle().run(),
+        };
+    },
+});
 
 const CustomImage = Image.extend({
     addAttributes() {
@@ -64,6 +96,11 @@ export default function MainWorkspace() {
     // Dynamic CSV States (Phase 5)
     const [tableHeaders, setTableHeaders] = useState([]);
     const [isImporting, setIsImporting] = useState(false);
+
+    // TipTap active native attributes sync
+    const [activeFontFamily, setActiveFontFamily] = useState('');
+    const [activeFontSize, setActiveFontSize] = useState('');
+    const [activeColor, setActiveColor] = useState('#000000');
 
     // Find the current project meta
     const activeProject = projects.find(p => p.id === (projectId || ''));
@@ -217,6 +254,12 @@ export default function MainWorkspace() {
             HorizontalRule,
             Underline,
             SlashCommands,
+            TextStyle,
+            Color,
+            FontFamily,
+            FontSize,
+            Subscript,
+            Superscript,
         ],
         content: '', // Start entirely empty (Phase 3 requirements)
         editorProps: {
@@ -226,6 +269,31 @@ export default function MainWorkspace() {
             },
         },
     });
+
+    // Native TipTap Event Listener explicitly binds variables to React state since attributes lag on nested renders
+    useEffect(() => {
+        if (!editor) return;
+
+        const updateTypographyState = () => {
+            const fontFamily = editor.getAttributes('textStyle')?.fontFamily?.replace(/['"]/g, '') || '';
+            const fontSize = editor.getAttributes('textStyle')?.fontSize || '';
+            const color = editor.getAttributes('textStyle')?.color || '#000000';
+
+            setActiveFontFamily(fontFamily);
+            setActiveFontSize(fontSize);
+            setActiveColor(color);
+        };
+
+        editor.on('transaction', updateTypographyState);
+        editor.on('selectionUpdate', updateTypographyState);
+
+        updateTypographyState();
+
+        return () => {
+            editor.off('transaction', updateTypographyState);
+            editor.off('selectionUpdate', updateTypographyState);
+        };
+    }, [editor]);
 
     return (
         <div className="h-screen flex flex-col font-sans w-full bg-[#E5D7CC] overflow-hidden">
@@ -414,6 +482,65 @@ export default function MainWorkspace() {
                                     <button onClick={() => editor.chain().focus().toggleBulletList().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('bulletList') ? 'bg-blue-100 text-blue-700' : ''}`} title="Bullet List"><List size={16} /></button>
                                     <button onClick={() => editor.chain().focus().toggleOrderedList().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('orderedList') ? 'bg-blue-100 text-blue-700' : ''}`} title="Ordered List"><ListOrdered size={16} /></button>
                                     <button onClick={() => editor.chain().focus().toggleBlockquote().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('blockquote') ? 'bg-blue-100 text-blue-700' : ''}`} title="Blockquote"><Quote size={16} /></button>
+
+                                    {/* Advanced Typography Controls */}
+                                    <div className="w-px h-6 bg-gray-300 mx-1"></div>
+
+                                    <select
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val) {
+                                                const formattedVal = val.includes(' ') && !val.startsWith("'") ? `'${val}'` : val;
+                                                editor.chain().focus().setFontFamily(formattedVal).run();
+                                            } else {
+                                                editor.chain().focus().unsetFontFamily().run();
+                                            }
+                                        }}
+                                        value={activeFontFamily}
+                                        className="p-1 px-2 rounded hover:bg-gray-100 text-gray-700 border-none outline-none cursor-pointer text-sm font-medium bg-transparent"
+                                        title="Font Family"
+                                    >
+                                        <option value="">Default Font</option>
+                                        <option value="Inter" style={{ fontFamily: 'Inter' }}>Inter</option>
+                                        <option value="Arial" style={{ fontFamily: 'Arial' }}>Arial</option>
+                                        <option value="Times New Roman" style={{ fontFamily: "'Times New Roman'" }}>Times New Roman</option>
+                                        <option value="Courier New" style={{ fontFamily: "'Courier New'" }}>Courier New</option>
+                                    </select>
+
+                                    <select
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val) {
+                                                editor.chain().focus().setFontSize(val).run();
+                                            } else {
+                                                editor.chain().focus().unsetFontSize().run();
+                                            }
+                                        }}
+                                        value={activeFontSize}
+                                        className="p-1 px-1 rounded hover:bg-gray-100 text-gray-700 border-none outline-none cursor-pointer text-sm font-medium bg-transparent"
+                                        title="Font Size"
+                                    >
+                                        <option value="">Size</option>
+                                        <option value="12px">12px</option>
+                                        <option value="14px">14px</option>
+                                        <option value="16px">16px</option>
+                                        <option value="20px">20px</option>
+                                        <option value="24px">24px</option>
+                                    </select>
+
+                                    <div className="flex items-center justify-center p-1 rounded hover:bg-gray-100 cursor-pointer" title="Font Color">
+                                        <input
+                                            type="color"
+                                            onInput={(e) => editor.chain().focus().setColor(e.target.value).run()}
+                                            value={activeColor}
+                                            className="w-5 h-5 p-0 border-0 rounded cursor-pointer bg-transparent overflow-hidden object-cover"
+                                        />
+                                    </div>
+
+                                    <div className="w-px h-5 bg-gray-200 mx-1"></div>
+
+                                    <button onClick={() => editor.chain().focus().toggleSubscript().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('subscript') ? 'bg-blue-100 text-blue-700' : ''}`} title="Subscript"><SubscriptIcon size={16} /></button>
+                                    <button onClick={() => editor.chain().focus().toggleSuperscript().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('superscript') ? 'bg-blue-100 text-blue-700' : ''}`} title="Superscript"><SuperscriptIcon size={16} /></button>
                                 </div>
                             )}
 
