@@ -29,6 +29,7 @@ import { Superscript } from '@tiptap/extension-superscript';
 import ResizableImageNode from './ResizableImageNode';
 import { SlashCommands } from './SlashCommands';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import SymbolPickerModal from './SymbolPickerModal';
 
 const FontSize = Extension.create({
     name: 'fontSize',
@@ -101,6 +102,14 @@ export default function MainWorkspace() {
     const [activeFontFamily, setActiveFontFamily] = useState('');
     const [activeFontSize, setActiveFontSize] = useState('');
     const [activeColor, setActiveColor] = useState('#000000');
+
+    const [isSymbolPickerOpen, setIsSymbolPickerOpen] = useState(false);
+
+    useEffect(() => {
+        const handleOpen = () => setIsSymbolPickerOpen(true);
+        window.addEventListener('open-symbol-picker', handleOpen);
+        return () => window.removeEventListener('open-symbol-picker', handleOpen);
+    }, []);
 
     // Find the current project meta
     const activeProject = projects.find(p => p.id === (projectId || ''));
@@ -692,6 +701,13 @@ export default function MainWorkspace() {
             <ExportPdfModal
                 isOpen={isExportModalOpen}
                 onClose={() => setIsExportModalOpen(false)}
+            />
+
+            {/* Symbol Picker Modal */}
+            <SymbolPickerModal
+                isOpen={isSymbolPickerOpen}
+                onClose={() => setIsSymbolPickerOpen(false)}
+                editor={editor}
             />
         </div>
     );
