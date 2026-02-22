@@ -108,9 +108,10 @@ export default function MainWorkspace() {
     const [isSymbolPickerOpen, setIsSymbolPickerOpen] = useState(false);
     const [comments, setComments] = useState([]);
 
-    // Spatial Commenting (Phase 15)
+    // Spatial Commenting (Phase 16 - Threaded)
     const [isCommentMode, setIsCommentMode] = useState(false);
-    const [draftComment, setDraftComment] = useState(null);
+    const [activeCommentId, setActiveCommentId] = useState(null);
+    const [replyText, setReplyText] = useState("");
 
     useEffect(() => {
         const handleOpen = () => setIsSymbolPickerOpen(true);
@@ -141,8 +142,38 @@ export default function MainWorkspace() {
         const rect = e.currentTarget.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
-        setDraftComment({ x, y, text: '' });
+
+        const newId = Date.now().toString();
+        setComments(prev => [
+            ...prev,
+            {
+                id: newId,
+                x,
+                y,
+                resolved: false,
+                replies: []
+            }
+        ]);
+        setActiveCommentId(newId);
+        setReplyText("");
         setIsCommentMode(false); // Turn off mode immediately to allow typing
+    };
+
+    const handleAddReply = (commentId, text) => {
+        if (!text.trim()) return;
+        const newReply = {
+            replyId: Date.now().toString(),
+            author: { name: user?.name, avatarUrl: user?.avatarUrl },
+            text: text,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setComments(prev => prev.map(c => {
+            if (c.id === commentId) {
+                return { ...c, replies: [...(c.replies || []), newReply] };
+            }
+            return c;
+        }));
+        setReplyText("");
     };
 
     const handleWorkbenchImport = (e) => {
@@ -713,67 +744,93 @@ export default function MainWorkspace() {
                             {/* Spatial Comment Overlay Rendering */}
                             {comments.map((comment) => {
                                 if (comment.resolved || comment.x === undefined) return null;
+                                const isActive = activeCommentId === comment.id;
                                 return (
                                     <div
                                         key={comment.id}
                                         style={{ position: 'absolute', left: comment.x, top: comment.y, transform: 'translate(-50%, -50%)' }}
-                                        className="z-50 group cursor-pointer"
-                                        onClick={(e) => { e.stopPropagation(); setActiveRightPanel('comments'); }}
-                                        title={comment.author?.name}
+                                        className="z-50"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveCommentId(isActive ? null : comment.id);
+                                            setActiveRightPanel('comments');
+                                        }}
                                     >
-                                        <div className="w-8 h-8 rounded-full bg-yellow-400 text-white flex items-center justify-center shadow-lg border-2 border-white group-hover:bg-yellow-500 transition-colors">
+                                        <div
+                                            className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg border-2 border-white cursor-pointer transition-colors ${isActive ? 'bg-yellow-500' : 'bg-yellow-400 hover:bg-yellow-500'} text-white`}
+                                            title={comment.replies?.[0]?.author?.name || 'New Thread'}
+                                        >
                                             <MessageSquarePlus size={14} />
                                         </div>
+
+                                        {/* Popover */}
+                                        {isActive && (
+                                            <div
+                                                className="absolute left-10 top-0 bg-white shadow-xl rounded-lg w-72 border border-gray-200 cursor-default animate-in fade-in zoom-in duration-200"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                {/* Header */}
+                                                <div className="flex justify-between items-center px-3 py-2 border-b border-gray-100 bg-gray-50/50 rounded-t-lg">
+                                                    <span className="text-xs font-bold text-gray-700">Thread</span>
+                                                    <button onClick={() => {
+                                                        setActiveCommentId(null);
+                                                        // Cleanup empty threads
+                                                        if (!comment.replies || comment.replies.length === 0) {
+                                                            setComments(prev => prev.filter(c => c.id !== comment.id));
+                                                        }
+                                                    }} className="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+                                                </div>
+
+                                                {/* Replies History */}
+                                                <div className="max-h-56 overflow-y-auto p-3 flex flex-col gap-3">
+                                                    {comment.replies && comment.replies.length > 0 ? (
+                                                        comment.replies.map(reply => (
+                                                            <div key={reply.replyId} className="flex gap-2">
+                                                                <img src={reply.author?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(reply.author?.name || 'User')}&background=random`} alt="" className="w-6 h-6 rounded-full shrink-0" />
+                                                                <div className="flex flex-col flex-1">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-[11px] font-bold text-gray-800">{reply.author?.name}</span>
+                                                                        <span className="text-[10px] text-gray-400">{reply.timestamp}</span>
+                                                                    </div>
+                                                                    <p className="text-xs text-gray-600 mt-0.5 whitespace-pre-wrap leading-relaxed">{reply.text}</p>
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <div className="text-center text-xs text-gray-400 italic py-4">No messages yet. Say hi!</div>
+                                                    )}
+                                                </div>
+
+                                                {/* Input area */}
+                                                <div className="p-2 border-t border-gray-100 bg-gray-50 rounded-b-lg">
+                                                    <textarea
+                                                        className="w-full text-xs p-2 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-yellow-400/50 resize-none min-h-[50px] text-gray-800 bg-white"
+                                                        placeholder="Reply to thread..."
+                                                        value={replyText}
+                                                        onChange={(e) => setReplyText(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                                e.preventDefault();
+                                                                handleAddReply(comment.id, replyText);
+                                                            }
+                                                        }}
+                                                        autoFocus
+                                                    />
+                                                    <div className="flex justify-between items-center mt-2">
+                                                        <span className="text-[10px] text-gray-400">Press Enter to send</span>
+                                                        <button
+                                                            onClick={() => handleAddReply(comment.id, replyText)}
+                                                            className="px-4 py-1.5 text-[11px] font-bold bg-yellow-400 text-white rounded hover:bg-yellow-500 shadow-sm"
+                                                        >
+                                                            Reply
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}
-
-                            {draftComment && (
-                                <div
-                                    style={{ position: 'absolute', left: draftComment.x, top: draftComment.y, transform: 'translate(0, 0)' }}
-                                    className="z-50 bg-white shadow-2xl rounded-xl border border-gray-200 p-4 w-64 animate-in fade-in zoom-in duration-200"
-                                    onClick={(e) => e.stopPropagation()} /* Prevent closing clicking inside */
-                                >
-                                    <textarea
-                                        className="w-full text-sm p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400/50 resize-none min-h-[60px] text-gray-800"
-                                        placeholder="Add a comment..."
-                                        value={draftComment.text}
-                                        onChange={(e) => setDraftComment({ ...draftComment, text: e.target.value })}
-                                        autoFocus
-                                    />
-                                    <div className="flex justify-end gap-2 mt-3">
-                                        <button
-                                            onClick={() => setDraftComment(null)}
-                                            className="px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-lg"
-                                        >
-                                            Cancel
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                if (!draftComment.text.trim()) return;
-                                                const newId = Date.now().toString();
-                                                setComments(prev => [
-                                                    ...prev,
-                                                    {
-                                                        id: newId,
-                                                        x: draftComment.x,
-                                                        y: draftComment.y,
-                                                        text: draftComment.text,
-                                                        author: { name: user?.name, avatarUrl: user?.avatarUrl },
-                                                        createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                                                        resolved: false
-                                                    }
-                                                ]);
-                                                setDraftComment(null);
-                                                setActiveRightPanel('comments');
-                                            }}
-                                            className="px-3 py-1.5 text-xs font-bold bg-yellow-400 text-white rounded-lg hover:bg-yellow-500"
-                                        >
-                                            Post
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
 
                         </div>
                     </div>
