@@ -1,0 +1,21 @@
+[36mvite v7.3.1 [32mbuilding client environment for production...[36m[39m
+transforming...
+[32m✓[39m 45 modules transformed.
+[31m✗[39m Build failed in 1.74s
+[31merror during build:
+[31msrc/components/SlashCommands.js (17:22): Expression expected[31m
+file: [36mC:/Users/abhis/OneDrive/Desktop/VitroWorkspace/vitro-ui/src/components/SlashCommands.js:17:22[31m
+[33m
+15:                 title: 'Text',
+16:                 description: 'Just start typing with plain text.',
+17:                 icon: <Type size={16} />,
+                          ^
+18:                 command: ({ editor, range }) => {
+19:                     editor.chain().focus().deleteRange(range).setNode('paragraph').run();
+[31m
+    at getRollupError (file:///C:/Users/abhis/OneDrive/Desktop/VitroWorkspace/vitro-ui/node_modules/rollup/dist/es/shared/parseAst.js:402:41)
+    at ParseError.initialise (file:///C:/Users/abhis/OneDrive/Desktop/VitroWorkspace/vitro-ui/node_modules/rollup/dist/es/shared/node-entry.js:14465:28)
+    at convertNode (file:///C:/Users/abhis/OneDrive/Desktop/VitroWorkspace/vitro-ui/node_modules/rollup/dist/es/shared/node-entry.js:16437:10)
+    at convertProgram (file:///C:/Users/abhis/OneDrive/Desktop/VitroWorkspace/vitro-ui/node_modules/rollup/dist/es/shared/node-entry.js:15677:12)
+    at Module.setSource (file:///C:/Users/abhis/OneDrive/Desktop/VitroWorkspace/vitro-ui/node_modules/rollup/dist/es/shared/node-entry.js:17392:24)
+    at async ModuleLoader.addModuleSource (file:///C:/Users/abhis/OneDrive/Desktop/VitroWorkspace/vitro-ui/node_modules/rollup/dist/es/shared/node-entry.js:21474:13)[39m

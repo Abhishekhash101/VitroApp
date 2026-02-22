@@ -2,16 +2,42 @@ import React, { useState } from 'react';
 import {
     FlaskConical, ChevronDown, Folder, FileText, BarChart2, Option,
     Settings, Download, Trash2, Cloud, Share, CheckCircle2, Save, Upload,
-    Clock, Image as ImageIcon
+    Clock, Image as ImageIcon, Bold, Italic, Underline as UnderlineIcon, Strikethrough,
+    Heading1, Heading2, List, ListOrdered, Quote
 } from 'lucide-react';
 import ShareModal from './ShareModal';
 import ExportPdfModal from './ExportPdfModal';
 import RightSidebar from './RightSidebar';
 import { useAppContext } from '../context/AppContext';
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, ReactNodeViewRenderer } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
+import Dropcursor from '@tiptap/extension-dropcursor';
+import TextAlign from '@tiptap/extension-text-align';
+import HorizontalRule from '@tiptap/extension-horizontal-rule';
+import Underline from '@tiptap/extension-underline';
+import ResizableImageNode from './ResizableImageNode';
+import { SlashCommands } from './SlashCommands';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+const CustomImage = Image.extend({
+    addAttributes() {
+        return {
+            ...this.parent?.(),
+            width: {
+                default: '100%',
+                renderHTML: attributes => { return { width: attributes.width }; }
+            },
+            float: {
+                default: 'none',
+                renderHTML: attributes => { return { style: `float: ${attributes.float}` }; }
+            },
+        };
+    },
+    addNodeView() {
+        return ReactNodeViewRenderer(ResizableImageNode);
+    }
+});
 import { useParams, useNavigate } from 'react-router-dom';
 import Papa from 'papaparse';
 
@@ -20,6 +46,7 @@ export default function MainWorkspace() {
     const navigate = useNavigate();
 
     const {
+        user,
         projects,
         addFileToProject,
         isShareModalOpen, setIsShareModalOpen,
@@ -29,6 +56,10 @@ export default function MainWorkspace() {
 
     // Start entirely empty (Phase 3 requirements)
     const [chartData, setChartData] = useState([]);
+
+    // Dynamic CSV States (Phase 5)
+    const [tableHeaders, setTableHeaders] = useState([]);
+    const [isImporting, setIsImporting] = useState(false);
 
     // Find the current project meta
     const activeProject = projects.find(p => p.id === (projectId || ''));
@@ -45,28 +76,6 @@ export default function MainWorkspace() {
         const newData = [...chartData];
         newData[index] = { ...newData[index], temp: newData[index].temp + 2 };
         setChartData(newData);
-    };
-
-    // CSV Parsing Logic
-    const handleFileUpload = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        Papa.parse(file, {
-            header: true,
-            dynamicTyping: true,
-            skipEmptyLines: true,
-            complete: (results) => {
-                const formattedData = results.data.map((row, index) => ({
-                    id: index,
-                    time: parseFloat(row.time || row.Time || index || 0),
-                    temp: parseFloat(row.temp || row.temperature || row.Temperature || row.Temp || 0),
-                    pressure: parseFloat(row.pressure || row.Pressure || 100.0),
-                    outlier: 'No'
-                }));
-                setChartData(formattedData);
-            }
-        });
     };
 
     const handleWorkbenchImport = (e) => {
@@ -113,21 +122,26 @@ export default function MainWorkspace() {
                 if (isImage && editor) {
                     editor.chain().focus().setImage({ src: reader.result }).run();
                 } else if (file.name.endsWith('.csv') || file.type === 'text/csv' || file.name.endsWith('.txt')) {
-                    Papa.parse(reader.result, {
-                        header: true,
-                        dynamicTyping: true,
-                        skipEmptyLines: true,
-                        complete: (results) => {
-                            const formattedData = results.data.map((row, index) => ({
-                                id: index,
-                                time: parseFloat(row.time || row.Time || index || 0),
-                                temp: parseFloat(row.temp || row.temperature || row.Temperature || row.Temp || 0),
-                                pressure: parseFloat(row.pressure || row.Pressure || 100.0),
-                                outlier: 'No'
-                            }));
-                            setChartData(formattedData);
-                        }
-                    });
+                    setIsImporting(true);
+                    setTimeout(() => {
+                        Papa.parse(reader.result, {
+                            header: true,
+                            dynamicTyping: true,
+                            skipEmptyLines: true,
+                            complete: (results) => {
+                                if (results.meta && results.meta.fields) {
+                                    setTableHeaders(results.meta.fields);
+                                }
+                                const formattedData = results.data.map((row, index) => ({
+                                    id: index,
+                                    ...row,
+                                    outlier: 'No'
+                                }));
+                                setChartData(formattedData);
+                                setIsImporting(false);
+                            }
+                        });
+                    }, 100);
                 }
             };
             if (isImage) {
@@ -147,30 +161,55 @@ export default function MainWorkspace() {
             if (fileObject.type.startsWith('image/') && editor) {
                 editor.chain().focus().setImage({ src: fileObject.data }).run();
             } else if (fileObject.name.endsWith('.csv') || fileObject.type === 'text/csv' || fileObject.name.endsWith('.txt')) {
-                Papa.parse(fileObject.data, {
-                    header: true,
-                    dynamicTyping: true,
-                    skipEmptyLines: true,
-                    complete: (results) => {
-                        const formattedData = results.data.map((row, index) => ({
-                            id: index,
-                            time: parseFloat(row.time || row.Time || index || 0),
-                            temp: parseFloat(row.temp || row.temperature || row.Temperature || row.Temp || 0),
-                            pressure: parseFloat(row.pressure || row.Pressure || 100.0),
-                            outlier: 'No'
-                        }));
-                        setChartData(formattedData);
-                    }
-                });
+                setIsImporting(true);
+                setTimeout(() => {
+                    Papa.parse(fileObject.data, {
+                        header: true,
+                        dynamicTyping: true,
+                        skipEmptyLines: true,
+                        complete: (results) => {
+                            if (results.meta && results.meta.fields) {
+                                setTableHeaders(results.meta.fields);
+                            }
+                            const formattedData = results.data.map((row, index) => ({
+                                id: index,
+                                ...row,
+                                outlier: 'No'
+                            }));
+                            setChartData(formattedData);
+                            setIsImporting(false);
+                        }
+                    });
+                }, 100);
             }
         } catch (err) {
             console.error("Drop error", err);
+            setIsImporting(false);
         }
     };
 
-    // TipTap Editor Configuration with Image Extension
+    // TipTap Editor Configuration with Custom Extensions
     const editor = useEditor({
-        extensions: [StarterKit, Image],
+        extensions: [
+            StarterKit,
+            CustomImage.configure({
+                inline: true,
+                allowBase64: true,
+                HTMLAttributes: {
+                    style: 'display: inline-block; max-width: 100%; height: auto; transition: width 0.2s ease;',
+                },
+            }),
+            Dropcursor.configure({
+                color: '#1A73E8',
+                width: 4,
+            }),
+            TextAlign.configure({
+                types: ['heading', 'paragraph', 'image'],
+            }),
+            HorizontalRule,
+            Underline,
+            SlashCommands,
+        ],
         content: '', // Start entirely empty (Phase 3 requirements)
         editorProps: {
             attributes: {
@@ -179,19 +218,6 @@ export default function MainWorkspace() {
             },
         },
     });
-
-    // Image Upload Logic for TipTap
-    const handleImageUpload = (e) => {
-        const file = e.target.files[0];
-        if (!file || !editor) return;
-
-        const reader = new FileReader();
-        reader.onload = () => {
-            const base64 = reader.result;
-            editor.chain().focus().setImage({ src: base64 }).run();
-        };
-        reader.readAsDataURL(file);
-    };
 
     return (
         <div className="h-screen flex flex-col font-sans w-full bg-[#E5D7CC] overflow-hidden">
@@ -357,69 +383,111 @@ export default function MainWorkspace() {
                             <h1 className="text-4xl lg:text-[44px] font-serif text-[#111111] font-bold leading-tight mb-4 tracking-tight">
                                 {activeProject?.name || 'Untitled Analysis'}
                             </h1>
-                            <div className="inline-block bg-[#62414A] text-white text-[10px] font-extrabold tracking-widest px-3 py-1.5 rounded uppercase mb-8">
-                                {activeProject?.owner || 'Owner'}
+                            <div className="flex items-center gap-2 mb-8">
+                                <div className="inline-block bg-[#62414A] text-white text-[10px] font-extrabold tracking-widest px-3 py-1.5 rounded uppercase">
+                                    {user?.name || 'Unknown Author'}
+                                </div>
+                                <span className="text-[#3E2A2F]/40 text-sm font-medium flex items-center gap-1">
+                                    <Clock size={14} /> Just now
+                                </span>
                             </div>
 
+                            {/* Sticky Formatting Toolbar */}
+                            {editor && (
+                                <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border border-gray-200 shadow-sm rounded-lg p-1.5 flex flex-wrap items-center gap-1 mb-6">
+                                    <button onClick={() => editor.chain().focus().toggleBold().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('bold') ? 'bg-blue-100 text-blue-700' : ''}`} title="Bold"><Bold size={16} /></button>
+                                    <button onClick={() => editor.chain().focus().toggleItalic().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('italic') ? 'bg-blue-100 text-blue-700' : ''}`} title="Italic"><Italic size={16} /></button>
+                                    <button onClick={() => editor.chain().focus().toggleUnderline().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('underline') ? 'bg-blue-100 text-blue-700' : ''}`} title="Underline"><UnderlineIcon size={16} /></button>
+                                    <button onClick={() => editor.chain().focus().toggleStrike().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('strike') ? 'bg-blue-100 text-blue-700' : ''}`} title="Strikethrough"><Strikethrough size={16} /></button>
+                                    <div className="w-px h-5 bg-gray-200 mx-1"></div>
+                                    <button onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('heading', { level: 1 }) ? 'bg-blue-100 text-blue-700' : ''}`} title="Heading 1"><Heading1 size={16} /></button>
+                                    <button onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('heading', { level: 2 }) ? 'bg-blue-100 text-blue-700' : ''}`} title="Heading 2"><Heading2 size={16} /></button>
+                                    <div className="w-px h-5 bg-gray-200 mx-1"></div>
+                                    <button onClick={() => editor.chain().focus().toggleBulletList().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('bulletList') ? 'bg-blue-100 text-blue-700' : ''}`} title="Bullet List"><List size={16} /></button>
+                                    <button onClick={() => editor.chain().focus().toggleOrderedList().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('orderedList') ? 'bg-blue-100 text-blue-700' : ''}`} title="Ordered List"><ListOrdered size={16} /></button>
+                                    <button onClick={() => editor.chain().focus().toggleBlockquote().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('blockquote') ? 'bg-blue-100 text-blue-700' : ''}`} title="Blockquote"><Quote size={16} /></button>
+                                </div>
+                            )}
+
                             {/* Editor Area */}
-                            <div className="mb-10 min-h-[500px]">
+                            <div className="mb-10 min-h-[500px] relative">
                                 <EditorContent editor={editor} />
                             </div>
 
-                            {chartData.length > 0 && (
+                            {isImporting && (
+                                <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center rounded-3xl">
+                                    <div className="flex flex-col items-center">
+                                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B7684C] mb-4"></div>
+                                        <p className="text-[#3E2A2F] font-bold text-lg">Processing Data...</p>
+                                        <p className="text-[#3E2A2F]/60 text-sm mt-1">Extracting variables and rendering chart</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {chartData.length > 0 && !isImporting && (
                                 <>
                                     {/* Data Table */}
-                                    <div className="border border-[#E5D7CC] rounded-xl overflow-hidden mb-12 shadow-sm font-sans">
-                                        <table className="w-full text-left text-sm">
-                                            <thead className="bg-[#DFC0A3] text-[#3E2A2F] text-xs uppercase tracking-wider font-bold">
-                                                <tr>
-                                                    <th className="px-6 py-4">Time (S)</th>
-                                                    <th className="px-6 py-4">Temp (C)</th>
-                                                    <th className="px-6 py-4">Pressure (KPA)</th>
-                                                    <th className="px-6 py-4">Outlier?</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-100">
-                                                {chartData.map((row, index) => (
-                                                    <tr key={row.id} className={row.outlier === 'Yes' ? 'bg-[#9B594D] text-white font-bold' : 'bg-white hover:bg-gray-50/50'}>
-                                                        <td className="px-6 py-4">
-                                                            <input
-                                                                type="number"
-                                                                value={row.time}
-                                                                onChange={(e) => handleTableChange(index, 'time', e.target.value)}
-                                                                className={`w-full bg-transparent border-none focus:ring-2 focus:ring-[#864A3D]/40 rounded px-1 outline-none ${row.outlier === 'Yes' ? 'text-white' : 'text-gray-600'}`}
-                                                            />
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <input
-                                                                type="number"
-                                                                value={row.temp}
-                                                                onChange={(e) => handleTableChange(index, 'temp', e.target.value)}
-                                                                className={`w-full bg-transparent border-none focus:ring-2 focus:ring-[#864A3D]/40 rounded px-1 outline-none ${row.outlier === 'Yes' ? 'text-white' : 'text-gray-600'}`}
-                                                            />
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <input
-                                                                type="number"
-                                                                value={row.pressure}
-                                                                onChange={(e) => handleTableChange(index, 'pressure', e.target.value)}
-                                                                className={`w-full bg-transparent border-none focus:ring-2 focus:ring-[#864A3D]/40 rounded px-1 outline-none ${row.outlier === 'Yes' ? 'text-white' : 'text-gray-600'}`}
-                                                            />
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <select
-                                                                value={row.outlier}
-                                                                onChange={(e) => handleTableChange(index, 'outlier', e.target.value)}
-                                                                className={`bg-transparent border-none focus:ring-2 focus:ring-[#864A3D]/40 rounded outline-none cursor-pointer ${row.outlier === 'Yes' ? 'text-white' : 'text-gray-600'}`}
-                                                            >
-                                                                <option value="No" className="text-gray-800">No</option>
-                                                                <option value="Yes" className="text-gray-800">Yes</option>
-                                                            </select>
-                                                        </td>
+                                    <div className="border border-[#E5D7CC] rounded-xl overflow-hidden mb-12 shadow-sm font-sans flex flex-col">
+                                        <div className="max-h-64 overflow-y-auto w-full">
+                                            <table className="w-full text-left text-sm whitespace-nowrap">
+                                                <thead className="bg-[#DFC0A3] text-[#3E2A2F] text-xs uppercase tracking-wider font-bold sticky top-0 z-10">
+                                                    <tr>
+                                                        <th className="px-6 py-4 truncate max-w-[150px]">Outlier?</th>
+                                                        {tableHeaders.length > 0 ? (
+                                                            tableHeaders.map((header, i) => (
+                                                                <th key={`header-${i}`} className="px-6 py-4 truncate max-w-[150px]">{header}</th>
+                                                            ))
+                                                        ) : (
+                                                            <>
+                                                                <th className="px-6 py-4">Key 1</th>
+                                                                <th className="px-6 py-4">Key 2</th>
+                                                            </>
+                                                        )}
                                                     </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                    {chartData.slice(0, 100).map((row, index) => {
+                                                        // Exclude internal keys from the generic map
+                                                        const dataEntries = Object.entries(row).filter(([k]) => k !== 'id' && k !== 'outlier');
+
+                                                        return (
+                                                            <tr key={row.id} className={row.outlier === 'Yes' ? 'bg-[#9B594D] text-white font-bold' : 'bg-white hover:bg-gray-50/50'}>
+                                                                <td className="px-6 py-4 w-[120px] shrink-0">
+                                                                    <select
+                                                                        value={row.outlier || 'No'}
+                                                                        onChange={(e) => handleTableChange(index, 'outlier', e.target.value)}
+                                                                        className={`w-full bg-transparent border border-gray-200 focus:ring-2 focus:ring-[#864A3D]/40 rounded outline-none cursor-pointer py-1 px-2 ${row.outlier === 'Yes' ? 'text-white border-white/20' : 'text-gray-600'}`}
+                                                                    >
+                                                                        <option value="No" className="text-gray-800">No</option>
+                                                                        <option value="Yes" className="text-gray-800">Yes</option>
+                                                                    </select>
+                                                                </td>
+
+                                                                {dataEntries.length > 0 ? (
+                                                                    dataEntries.map(([key, val], cellIndex) => (
+                                                                        <td key={`cell-${row.id}-${cellIndex}`} className="px-6 py-4 truncate max-w-[150px]">
+                                                                            <input
+                                                                                type="text"
+                                                                                value={val !== null && val !== undefined ? val : ''}
+                                                                                onChange={(e) => handleTableChange(index, key, e.target.value)}
+                                                                                className={`w-full bg-transparent border-none focus:ring-2 focus:ring-[#864A3D]/40 rounded px-1 outline-none ${row.outlier === 'Yes' ? 'text-white placeholder-white/50' : 'text-gray-600'}`}
+                                                                            />
+                                                                        </td>
+                                                                    ))
+                                                                ) : (
+                                                                    <td colSpan="10" className="px-6 py-4 text-gray-400 italic">No valid row data parsed</td>
+                                                                )}
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        {chartData.length > 100 && (
+                                            <div className="bg-gray-50 py-2 text-center text-xs font-bold text-gray-500 border-t border-gray-100 shrink-0">
+                                                Showing 100 of {chartData.length} records in DOM (performance limited). The chart renders all points.
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Chart Section */}
@@ -431,7 +499,13 @@ export default function MainWorkspace() {
                                             <ResponsiveContainer width="100%" height="100%">
                                                 <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#3E2A2F20" />
-                                                    <XAxis dataKey="time" axisLine={{ stroke: '#3E2A2F40' }} tickLine={false} tick={{ fontSize: 10, fill: '#3E2A2F80' }} dy={10} />
+                                                    <XAxis
+                                                        dataKey={tableHeaders.length > 0 ? tableHeaders[0] : ""}
+                                                        axisLine={{ stroke: '#3E2A2F40' }}
+                                                        tickLine={false}
+                                                        tick={{ fontSize: 10, fill: '#3E2A2F80' }}
+                                                        dy={10}
+                                                    />
                                                     <YAxis axisLine={{ stroke: '#3E2A2F40' }} tickLine={false} tick={{ fontSize: 10, fill: '#3E2A2F80' }} />
                                                     <Tooltip
                                                         contentStyle={{ backgroundColor: '#62414A', color: 'white', borderRadius: '8px', border: 'none', fontSize: '12px' }}
@@ -439,7 +513,7 @@ export default function MainWorkspace() {
                                                     />
                                                     <Line
                                                         type="monotone"
-                                                        dataKey="temp"
+                                                        dataKey={tableHeaders.length > 1 ? tableHeaders[1] : (tableHeaders.length > 0 ? tableHeaders[0] : "")}
                                                         stroke="#3E2A2F"
                                                         strokeWidth={2.5}
                                                         dot={{ r: 4, fill: '#3E2A2F', strokeWidth: 0 }}
