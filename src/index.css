@@ -7,3 +7,51 @@
     @apply bg-vitro-bg text-gray-800 antialiased;
   }
 }
+
+.custom-scroll-table {
+  display: block;
+  overflow-x: auto;
+  max-height: 400px;
+  overflow-y: auto;
+  width: 100%;
+}
+
+.ProseMirror table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+.ProseMirror table td,
+.ProseMirror table th {
+  min-width: 1em;
+  border: 2px solid #e5e7eb !important;
+  /* Tailwind gray-200 */
+  padding: 8px;
+  vertical-align: top;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.ProseMirror table th {
+  font-weight: bold;
+  text-align: left;
+  background-color: #f9fafb !important;
+  /* Tailwind gray-50 */
+}
+
+.tiptap .tableWrapper {
+  max-height: 300px;
+  overflow-y: auto;
+  overflow-x: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin: 1.5rem 0;
+}
+
+.tiptap table {
+  margin: 0 !important;
+  border: none !important;
+}

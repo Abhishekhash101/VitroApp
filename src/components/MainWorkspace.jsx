@@ -27,10 +27,16 @@ import { TextStyle } from '@tiptap/extension-text-style';
 import { FontFamily } from '@tiptap/extension-font-family';
 import { Subscript } from '@tiptap/extension-subscript';
 import { Superscript } from '@tiptap/extension-superscript';
+import CharacterCount from '@tiptap/extension-character-count';
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableHeader } from '@tiptap/extension-table-header';
+import { TableCell } from '@tiptap/extension-table-cell';
 import ResizableImageNode from './ResizableImageNode';
 import { SlashCommands } from './SlashCommands';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import SymbolPickerModal from './SymbolPickerModal';
+import TablePickerModal from './TablePickerModal';
 
 const FontSize = Extension.create({
     name: 'fontSize',
@@ -90,7 +96,8 @@ export default function MainWorkspace() {
         isShareModalOpen, setIsShareModalOpen,
         isExportModalOpen, setIsExportModalOpen,
         isBidirectionalEnabled,
-        setActiveRightPanel
+        setActiveRightPanel,
+        updateProjectTitle
     } = useAppContext();
 
     // Start entirely empty (Phase 3 requirements)
@@ -113,6 +120,9 @@ export default function MainWorkspace() {
     const [activeCommentId, setActiveCommentId] = useState(null);
     const [replyText, setReplyText] = useState("");
 
+    // Contextual Inspector (Phase 17)
+    const [selectionType, setSelectionType] = useState('document');
+
     useEffect(() => {
         const handleOpen = () => setIsSymbolPickerOpen(true);
         window.addEventListener('open-symbol-picker', handleOpen);
@@ -121,6 +131,15 @@ export default function MainWorkspace() {
 
     // Find the current project meta
     const activeProject = projects.find(p => p.id === (projectId || ''));
+
+    // Editable Title state 
+    const [localTitle, setLocalTitle] = useState(activeProject?.name || "Untitled Analysis");
+
+    useEffect(() => {
+        if (activeProject?.name) {
+            setLocalTitle(activeProject.name);
+        }
+    }, [activeProject?.name]);
 
     const handleTableChange = (index, field, value) => {
         const newData = [...chartData];
@@ -176,6 +195,78 @@ export default function MainWorkspace() {
         setReplyText("");
     };
 
+    // TipTap Editor Configuration with Custom Extensions
+    const editor = useEditor({
+        extensions: [
+            StarterKit,
+            Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
+            BulletList,
+            ListItem,
+            Blockquote,
+            CharacterCount,
+            Table.configure({
+                resizable: true,
+                HTMLAttributes: {
+                    class: 'custom-scroll-table',
+                },
+            }),
+            TableRow,
+            TableHeader,
+            TableCell,
+            CustomImage.configure({
+                inline: true,
+                allowBase64: true,
+                HTMLAttributes: {
+                    style: 'display: inline-block; max-width: 100%; height: auto; transition: width 0.2s ease;',
+                },
+            }),
+            Dropcursor.configure({
+                color: '#1A73E8',
+                width: 4,
+            }),
+            TextAlign.configure({
+                types: ['heading', 'paragraph', 'image'],
+            }),
+            HorizontalRule,
+            Underline,
+            SlashCommands,
+            TextStyle,
+            Color,
+            FontFamily,
+            FontSize,
+            Subscript,
+            Superscript,
+        ],
+        content: '', // Start entirely empty (Phase 3 requirements)
+        editorProps: {
+            attributes: {
+                class: 'prose prose-lg focus:outline-none max-w-none text-[#444] font-serif leading-relaxed min-h-[500px]',
+                placeholder: 'Start typing your analysis here...',
+            },
+        },
+    });
+
+    useEffect(() => {
+        if (!editor) return;
+        const updateSelection = () => {
+            if (editor.isActive('image')) {
+                setSelectionType('image');
+            } else if (!editor.state.selection.empty) {
+                setSelectionType('text');
+            } else if (editor.isActive('table')) {
+                setSelectionType('table');
+            } else {
+                setSelectionType('document');
+            }
+        };
+        editor.on('selectionUpdate', updateSelection);
+        editor.on('transaction', updateSelection);
+        return () => {
+            editor.off('selectionUpdate', updateSelection);
+            editor.off('transaction', updateSelection);
+        };
+    }, [editor]);
+
     const handleWorkbenchImport = (e) => {
         const files = Array.from(e.target.files);
         if (!files.length || !activeProject) return;
@@ -207,6 +298,36 @@ export default function MainWorkspace() {
         e.dataTransfer.effectAllowed = 'copy';
     };
 
+    const injectTableHTML = (fields, data) => {
+        if (!editor || !fields || !data.length) return;
+
+        let tableHTML = `<table class="custom-scroll-table"><tbody><tr>`;
+
+        // Generate Headers
+        fields.forEach(header => {
+            tableHTML += `<th><p>${header}</p></th>`;
+        });
+        tableHTML += `</tr>`;
+
+        // Limit to 100 rows to prevent DOM crashing
+        const displayData = data.slice(0, 100);
+
+        // Generate Rows
+        displayData.forEach(row => {
+            tableHTML += `<tr>`;
+            fields.forEach(header => {
+                const val = row[header] !== undefined && row[header] !== null ? String(row[header]) : '';
+                tableHTML += `<td><p>${val}</p></td>`;
+            });
+            tableHTML += `</tr>`;
+        });
+
+        tableHTML += `</tbody></table><p></p>`; // Add an empty paragraph after the table
+
+        // Inject into TipTap at the current cursor/drop position
+        editor.chain().focus().insertContent(tableHTML).run();
+    };
+
     const handleDrop = (e) => {
         e.preventDefault();
 
@@ -235,6 +356,8 @@ export default function MainWorkspace() {
                                     ...row,
                                     outlier: 'No'
                                 }));
+
+                                injectTableHTML(results.meta.fields, results.data);
                                 setChartData(formattedData);
                                 setIsImporting(false);
                             }
@@ -274,6 +397,8 @@ export default function MainWorkspace() {
                                 ...row,
                                 outlier: 'No'
                             }));
+
+                            injectTableHTML(results.meta.fields, results.data);
                             setChartData(formattedData);
                             setIsImporting(false);
                         }
@@ -286,46 +411,7 @@ export default function MainWorkspace() {
         }
     };
 
-    // TipTap Editor Configuration with Custom Extensions
-    const editor = useEditor({
-        extensions: [
-            StarterKit,
-            Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
-            BulletList,
-            ListItem,
-            Blockquote,
-            CustomImage.configure({
-                inline: true,
-                allowBase64: true,
-                HTMLAttributes: {
-                    style: 'display: inline-block; max-width: 100%; height: auto; transition: width 0.2s ease;',
-                },
-            }),
-            Dropcursor.configure({
-                color: '#1A73E8',
-                width: 4,
-            }),
-            TextAlign.configure({
-                types: ['heading', 'paragraph', 'image'],
-            }),
-            HorizontalRule,
-            Underline,
-            SlashCommands,
-            TextStyle,
-            Color,
-            FontFamily,
-            FontSize,
-            Subscript,
-            Superscript,
-        ],
-        content: '', // Start entirely empty (Phase 3 requirements)
-        editorProps: {
-            attributes: {
-                class: 'prose prose-lg focus:outline-none max-w-none text-[#444] font-serif leading-relaxed min-h-[500px]',
-                placeholder: 'Start typing your analysis here...',
-            },
-        },
-    });
+    // Duplicate editor declaration removed
 
     // Native TipTap Event Listener explicitly binds variables to React state since attributes lag on nested renders
     useEffect(() => {
@@ -473,7 +559,7 @@ export default function MainWorkspace() {
                             <div className="text-[10px] font-bold text-gray-400 tracking-[0.15em] flex items-center gap-2">
                                 <button onClick={() => navigate('/dashboard')} className="hover:text-gray-800 transition-colors">MY PROJECTS</button>
                                 <span>/</span>
-                                <span className="text-[#3E2A2F] font-extrabold uppercase truncate max-w-[200px]">{activeProject?.name || 'Untitled Document'}</span>
+                                <span className="text-[#3E2A2F] font-extrabold uppercase truncate max-w-[200px]">{(activeProject?.name || 'Untitled Document').toUpperCase()}</span>
                             </div>
 
                             <div className="flex items-center gap-5">
@@ -525,9 +611,15 @@ export default function MainWorkspace() {
                             className={`mb-14 relative ${isCommentMode ? 'cursor-crosshair' : ''}`}
                             onClick={handleCanvasClick}
                         >
-                            <h1 className="text-4xl lg:text-[44px] font-serif text-[#111111] font-bold leading-tight mb-4 tracking-tight">
-                                {activeProject?.name || 'Untitled Analysis'}
-                            </h1>
+                            <input
+                                type="text"
+                                className="text-4xl lg:text-[44px] font-serif text-[#111111] font-bold leading-tight mb-4 tracking-tight bg-transparent border-none outline-none ring-0 w-full placeholder-gray-300 focus:ring-0 p-0 m-0"
+                                value={localTitle}
+                                onChange={(e) => setLocalTitle(e.target.value)}
+                                onBlur={() => updateProjectTitle(activeProject?.id, localTitle || "Untitled Analysis")}
+                                onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                                placeholder="Untitled Analysis"
+                            />
                             <div className="flex items-center gap-2 mb-8">
                                 <div className="inline-block bg-[#62414A] text-white text-[10px] font-extrabold tracking-widest px-3 py-1.5 rounded uppercase">
                                     {user?.name || 'Unknown Author'}
@@ -537,81 +629,7 @@ export default function MainWorkspace() {
                                 </span>
                             </div>
 
-                            {/* Sticky Formatting Menu (Replacing Failed BubbleMenu) */}
-                            {editor && (
-                                <div className="sticky top-0 z-40 bg-white shadow-xl border border-gray-200 rounded-lg p-1.5 flex flex-wrap items-center gap-1 mb-6">
-                                    <button onClick={() => editor.chain().focus().toggleBold().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('bold') ? 'bg-blue-100 text-blue-700' : ''}`} title="Bold"><Bold size={16} /></button>
-                                    <button onClick={() => editor.chain().focus().toggleItalic().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('italic') ? 'bg-blue-100 text-blue-700' : ''}`} title="Italic"><Italic size={16} /></button>
-                                    <button onClick={() => editor.chain().focus().toggleUnderline().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('underline') ? 'bg-blue-100 text-blue-700' : ''}`} title="Underline"><UnderlineIcon size={16} /></button>
-                                    <button onClick={() => editor.chain().focus().toggleStrike().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('strike') ? 'bg-blue-100 text-blue-700' : ''}`} title="Strikethrough"><Strikethrough size={16} /></button>
-                                    <div className="w-px h-5 bg-gray-200 mx-1"></div>
-                                    <button onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('heading', { level: 1 }) ? 'bg-blue-100 text-blue-700' : ''}`} title="Heading 1"><Heading1 size={16} /></button>
-                                    <button onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('heading', { level: 2 }) ? 'bg-blue-100 text-blue-700' : ''}`} title="Heading 2"><Heading2 size={16} /></button>
-                                    <div className="w-px h-5 bg-gray-200 mx-1"></div>
-                                    <button onClick={() => editor.chain().focus().toggleBulletList().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('bulletList') ? 'bg-blue-100 text-blue-700' : ''}`} title="Bullet List"><List size={16} /></button>
-                                    <button onClick={() => editor.chain().focus().toggleOrderedList().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('orderedList') ? 'bg-blue-100 text-blue-700' : ''}`} title="Ordered List"><ListOrdered size={16} /></button>
-                                    <button onClick={() => editor.chain().focus().toggleBlockquote().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('blockquote') ? 'bg-blue-100 text-blue-700' : ''}`} title="Blockquote"><Quote size={16} /></button>
-
-                                    {/* Advanced Typography Controls */}
-                                    <div className="w-px h-6 bg-gray-300 mx-1"></div>
-
-                                    <select
-                                        onChange={(e) => {
-                                            const val = e.target.value;
-                                            if (val) {
-                                                const formattedVal = val.includes(' ') && !val.startsWith("'") ? `'${val}'` : val;
-                                                editor.chain().focus().setFontFamily(formattedVal).run();
-                                            } else {
-                                                editor.chain().focus().unsetFontFamily().run();
-                                            }
-                                        }}
-                                        value={activeFontFamily}
-                                        className="p-1 px-2 rounded hover:bg-gray-100 text-gray-700 border-none outline-none cursor-pointer text-sm font-medium bg-transparent"
-                                        title="Font Family"
-                                    >
-                                        <option value="">Default Font</option>
-                                        <option value="Inter" style={{ fontFamily: 'Inter' }}>Inter</option>
-                                        <option value="Arial" style={{ fontFamily: 'Arial' }}>Arial</option>
-                                        <option value="Times New Roman" style={{ fontFamily: "'Times New Roman'" }}>Times New Roman</option>
-                                        <option value="Courier New" style={{ fontFamily: "'Courier New'" }}>Courier New</option>
-                                    </select>
-
-                                    <select
-                                        onChange={(e) => {
-                                            const val = e.target.value;
-                                            if (val) {
-                                                editor.chain().focus().setFontSize(val).run();
-                                            } else {
-                                                editor.chain().focus().unsetFontSize().run();
-                                            }
-                                        }}
-                                        value={activeFontSize}
-                                        className="p-1 px-1 rounded hover:bg-gray-100 text-gray-700 border-none outline-none cursor-pointer text-sm font-medium bg-transparent"
-                                        title="Font Size"
-                                    >
-                                        <option value="">Size</option>
-                                        <option value="12px">12px</option>
-                                        <option value="14px">14px</option>
-                                        <option value="16px">16px</option>
-                                        <option value="20px">20px</option>
-                                        <option value="24px">24px</option>
-                                    </select>
-
-                                    <div className="flex items-center justify-center p-1 rounded hover:bg-gray-100 cursor-pointer" title="Font Color">
-                                        <input
-                                            type="color"
-                                            onInput={(e) => editor.chain().focus().setColor(e.target.value).run()}
-                                            value={activeColor}
-                                            className="w-5 h-5 p-0 border-0 rounded cursor-pointer bg-transparent overflow-hidden object-cover"
-                                        />
-                                    </div>
-
-                                    <div className="w-px h-5 bg-gray-200 mx-1"></div>
-
-                                    <button onClick={() => editor.chain().focus().toggleSubscript().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('subscript') ? 'bg-blue-100 text-blue-700' : ''}`} title="Subscript"><SubscriptIcon size={16} /></button>
-                                    <button onClick={() => editor.chain().focus().toggleSuperscript().run()} className={`p-1.5 rounded hover:bg-gray-100 text-gray-700 ${editor.isActive('superscript') ? 'bg-blue-100 text-blue-700' : ''}`} title="Superscript"><SuperscriptIcon size={16} /></button>
-                                </div>
-                            )}
+                            {/* Top formatting toolbar was moved to the contextual Properties sidebar */}
 
                             {/* Editor Area */}
                             <div className="mb-10 min-h-[500px] relative">
@@ -628,118 +646,7 @@ export default function MainWorkspace() {
                                 </div>
                             )}
 
-                            {chartData.length > 0 && !isImporting && (
-                                <>
-                                    {/* Data Table */}
-                                    <div className="border border-[#E5D7CC] rounded-xl overflow-hidden mb-12 shadow-sm font-sans flex flex-col">
-                                        <div className="max-h-64 overflow-y-auto w-full">
-                                            <table className="w-full text-left text-sm whitespace-nowrap">
-                                                <thead className="bg-[#DFC0A3] text-[#3E2A2F] text-xs uppercase tracking-wider font-bold sticky top-0 z-10">
-                                                    <tr>
-                                                        <th className="px-6 py-4 truncate max-w-[150px]">Outlier?</th>
-                                                        {tableHeaders.length > 0 ? (
-                                                            tableHeaders.map((header, i) => (
-                                                                <th key={`header-${i}`} className="px-6 py-4 truncate max-w-[150px]">{header}</th>
-                                                            ))
-                                                        ) : (
-                                                            <>
-                                                                <th className="px-6 py-4">Key 1</th>
-                                                                <th className="px-6 py-4">Key 2</th>
-                                                            </>
-                                                        )}
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-100">
-                                                    {chartData.slice(0, 100).map((row, index) => {
-                                                        // Exclude internal keys from the generic map
-                                                        const dataEntries = Object.entries(row).filter(([k]) => k !== 'id' && k !== 'outlier');
-
-                                                        return (
-                                                            <tr key={row.id} className={row.outlier === 'Yes' ? 'bg-[#9B594D] text-white font-bold' : 'bg-white hover:bg-gray-50/50'}>
-                                                                <td className="px-6 py-4 w-[120px] shrink-0">
-                                                                    <select
-                                                                        value={row.outlier || 'No'}
-                                                                        onChange={(e) => handleTableChange(index, 'outlier', e.target.value)}
-                                                                        className={`w-full bg-transparent border border-gray-200 focus:ring-2 focus:ring-[#864A3D]/40 rounded outline-none cursor-pointer py-1 px-2 ${row.outlier === 'Yes' ? 'text-white border-white/20' : 'text-gray-600'}`}
-                                                                    >
-                                                                        <option value="No" className="text-gray-800">No</option>
-                                                                        <option value="Yes" className="text-gray-800">Yes</option>
-                                                                    </select>
-                                                                </td>
-
-                                                                {dataEntries.length > 0 ? (
-                                                                    dataEntries.map(([key, val], cellIndex) => (
-                                                                        <td key={`cell-${row.id}-${cellIndex}`} className="px-6 py-4 truncate max-w-[150px]">
-                                                                            <input
-                                                                                type="text"
-                                                                                value={val !== null && val !== undefined ? val : ''}
-                                                                                onChange={(e) => handleTableChange(index, key, e.target.value)}
-                                                                                className={`w-full bg-transparent border-none focus:ring-2 focus:ring-[#864A3D]/40 rounded px-1 outline-none ${row.outlier === 'Yes' ? 'text-white placeholder-white/50' : 'text-gray-600'}`}
-                                                                            />
-                                                                        </td>
-                                                                    ))
-                                                                ) : (
-                                                                    <td colSpan="10" className="px-6 py-4 text-gray-400 italic">No valid row data parsed</td>
-                                                                )}
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                        {chartData.length > 100 && (
-                                            <div className="bg-gray-50 py-2 text-center text-xs font-bold text-gray-500 border-t border-gray-100 shrink-0">
-                                                Showing 100 of {chartData.length} records in DOM (performance limited). The chart renders all points.
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Chart Section */}
-                                    <div className="bg-[#EAD4C7] rounded-xl p-8 shadow-inner border border-[#D8C7B9] font-sans">
-                                        <h3 className="text-[#3E2A2F] font-bold text-lg mb-8 font-serif">Time vs. Temperature Analysis</h3>
-
-                                        {/* Dynamic Recharts Component */}
-                                        <div className="w-full h-56 pt-4">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#3E2A2F20" />
-                                                    <XAxis
-                                                        dataKey={tableHeaders.length > 0 ? tableHeaders[0] : ""}
-                                                        axisLine={{ stroke: '#3E2A2F40' }}
-                                                        tickLine={false}
-                                                        tick={{ fontSize: 10, fill: '#3E2A2F80' }}
-                                                        dy={10}
-                                                    />
-                                                    <YAxis axisLine={{ stroke: '#3E2A2F40' }} tickLine={false} tick={{ fontSize: 10, fill: '#3E2A2F80' }} />
-                                                    <Tooltip
-                                                        contentStyle={{ backgroundColor: '#62414A', color: 'white', borderRadius: '8px', border: 'none', fontSize: '12px' }}
-                                                        itemStyle={{ color: 'white' }}
-                                                    />
-                                                    <Line
-                                                        type="monotone"
-                                                        dataKey={tableHeaders.length > 1 ? tableHeaders[1] : (tableHeaders.length > 0 ? tableHeaders[0] : "")}
-                                                        stroke="#3E2A2F"
-                                                        strokeWidth={2.5}
-                                                        dot={{ r: 4, fill: '#3E2A2F', strokeWidth: 0 }}
-                                                        activeDot={{
-                                                            r: 7,
-                                                            fill: '#B7684C',
-                                                            stroke: 'white',
-                                                            strokeWidth: 2,
-                                                            onClick: isBidirectionalEnabled ? (e, payload) => handleDotClick(e, payload.index) : undefined,
-                                                            cursor: isBidirectionalEnabled ? 'pointer' : 'default'
-                                                        }}
-                                                    />
-                                                </LineChart>
-                                            </ResponsiveContainer>
-                                        </div>
-                                        <div className="text-center text-[10px] text-gray-400 font-medium italic mt-2">
-                                            {isBidirectionalEnabled ? "Click on a data point to mock a bi-directional drag/edit (+2 Temp)" : "Bi-directional editing is currently disabled in formatting settings."}
-                                        </div>
-
-                                    </div>
-                                </>
-                            )}
+                            {/* Chart Data is now managed entirely within the TipTap Document as native tables */}
 
                             {/* Spatial Comment Overlay Rendering */}
                             {comments.map((comment) => {
@@ -838,7 +745,13 @@ export default function MainWorkspace() {
                 </div>
 
                 {/* Column 3: Dynamic Right Sidebar */}
-                <RightSidebar comments={comments} setComments={setComments} editor={editor} user={user} />
+                <RightSidebar
+                    comments={comments}
+                    setComments={setComments}
+                    editor={editor}
+                    user={user}
+                    selectionType={selectionType}
+                />
 
             </div>
 
@@ -860,6 +773,9 @@ export default function MainWorkspace() {
                 onClose={() => setIsSymbolPickerOpen(false)}
                 editor={editor}
             />
+
+            {/* Table Picker Modal */}
+            <TablePickerModal editor={editor} />
         </div>
     );
 }

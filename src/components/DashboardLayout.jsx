@@ -3,7 +3,7 @@ import Sidebar from './Sidebar';
 import TopNavigation from './TopNavigation';
 import QuickAccessGallery from './QuickAccessGallery';
 import FilesTable from './FilesTable';
-import PropertiesPanel from './PropertiesPanel';
+import DashboardRightSidebar from './DashboardRightSidebar';
 import NewProjectModal from './NewProjectModal';
 import { FlaskConical } from 'lucide-react';
 
@@ -46,9 +46,9 @@ export default function DashboardLayout() {
                         <FilesTable selectedProject={selectedProject} setSelectedProject={setSelectedProject} />
                     </div>
 
-                    {/* Properties Panel */}
+                    {/* Dashboard Right Sidebar */}
                     <div className="w-[320px] bg-[#FAF7F5] border-l border-gray-200 shadow-[-4px_0_24px_-10px_rgba(0,0,0,0.05)] overflow-hidden shrink-0 flex flex-col">
-                        <PropertiesPanel project={selectedProject} />
+                        <DashboardRightSidebar project={selectedProject} />
                     </div>
 
                 </div>

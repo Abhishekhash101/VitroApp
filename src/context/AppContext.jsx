@@ -47,6 +47,20 @@ export function AppContextProvider({ children }) {
         }));
     };
 
+    const updateProjectTitle = (projectId, newTitle) => {
+        console.log("updateProjectTitle called with:", projectId, newTitle);
+        setProjects(prev => {
+            const next = prev.map(p => {
+                if (p.id === projectId) {
+                    return { ...p, name: newTitle };
+                }
+                return p;
+            });
+            console.log("updateProjectTitle next state:", next);
+            return next;
+        });
+    };
+
     // 4. Modal and Panel States
     const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -74,7 +88,8 @@ export function AppContextProvider({ children }) {
             activeRightPanel,
             setActiveRightPanel,
             isBidirectionalEnabled,
-            setIsBidirectionalEnabled
+            setIsBidirectionalEnabled,
+            updateProjectTitle
         }}>
             {children}
         </AppContext.Provider>

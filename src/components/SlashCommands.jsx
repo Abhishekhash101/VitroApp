@@ -4,7 +4,7 @@ import { ReactRenderer } from '@tiptap/react';
 import tippy from 'tippy.js';
 import CommandList from './CommandList';
 import React from 'react';
-import { Type, Heading1, Heading2, Heading3, List, Minus, Sigma } from 'lucide-react';
+import { Type, Heading1, Heading2, Heading3, List, Minus, Sigma, Table2 } from 'lucide-react';
 
 const suggestionConfig = {
     char: '/',
@@ -65,6 +65,15 @@ const suggestionConfig = {
                 icon: <Type size={16} />,
                 command: ({ editor, range }) => {
                     editor.chain().focus().deleteRange(range).toggleBlockquote().run();
+                },
+            },
+            {
+                title: 'Table',
+                description: 'Insert a customizable table.',
+                icon: <Table2 size={16} />,
+                command: ({ editor, range }) => {
+                    editor.chain().focus().deleteRange(range).run();
+                    window.dispatchEvent(new CustomEvent('open-table-picker'));
                 },
             },
             {
