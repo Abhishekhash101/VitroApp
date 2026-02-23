@@ -37,6 +37,7 @@ import { SlashCommands } from './SlashCommands';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import SymbolPickerModal from './SymbolPickerModal';
 import TablePickerModal from './TablePickerModal';
+import GraphExtension from './GraphExtension';
 
 const FontSize = Extension.create({
     name: 'fontSize',
@@ -97,11 +98,10 @@ export default function MainWorkspace() {
         isExportModalOpen, setIsExportModalOpen,
         isBidirectionalEnabled,
         setActiveRightPanel,
-        updateProjectTitle
+        updateProjectTitle,
+        chartData,
+        setChartData
     } = useAppContext();
-
-    // Start entirely empty (Phase 3 requirements)
-    const [chartData, setChartData] = useState([]);
 
     // Dynamic CSV States (Phase 5)
     const [tableHeaders, setTableHeaders] = useState([]);
@@ -236,8 +236,54 @@ export default function MainWorkspace() {
             FontSize,
             Subscript,
             Superscript,
+            GraphExtension,
         ],
         content: '', // Start entirely empty (Phase 3 requirements)
+        onUpdate: ({ editor }) => {
+            const json = editor.getJSON();
+            const documentChartData = [];
+
+            const parseNodes = (node) => {
+                if (node.type === 'table') {
+                    const headers = [];
+
+                    if (node.content && node.content.length > 0) {
+                        const headerRow = node.content[0];
+                        if (headerRow.content) {
+                            headerRow.content.forEach(cell => {
+                                const text = cell.content && cell.content[0] && cell.content[0].content
+                                    ? cell.content[0].content.map(t => t.text).join('')
+                                    : '';
+                                headers.push(text);
+                            });
+                        }
+
+                        for (let i = 1; i < node.content.length; i++) {
+                            const row = node.content[i];
+                            const rowData = { id: i - 1 };
+                            if (row.content) {
+                                row.content.forEach((cell, cellIndex) => {
+                                    const text = cell.content && cell.content[0] && cell.content[0].content
+                                        ? cell.content[0].content.map(t => t.text).join('')
+                                        : '';
+                                    const header = headers[cellIndex] || `col${cellIndex}`;
+                                    const num = Number(text);
+                                    rowData[header] = !isNaN(num) && text !== '' ? num : text;
+                                });
+                            }
+                            documentChartData.push(rowData);
+                        }
+                    }
+                } else if (node.content) {
+                    node.content.forEach(parseNodes);
+                }
+            };
+
+            parseNodes(json);
+            if (documentChartData.length > 0) {
+                setChartData(documentChartData);
+            }
+        },
         editorProps: {
             attributes: {
                 class: 'prose prose-lg focus:outline-none max-w-none text-[#444] font-serif leading-relaxed min-h-[500px]',
@@ -251,6 +297,8 @@ export default function MainWorkspace() {
         const updateSelection = () => {
             if (editor.isActive('image')) {
                 setSelectionType('image');
+            } else if (editor.isActive('graphBlock')) {
+                setSelectionType('graph');
             } else if (!editor.state.selection.empty) {
                 setSelectionType('text');
             } else if (editor.isActive('table')) {
@@ -751,6 +799,7 @@ export default function MainWorkspace() {
                     editor={editor}
                     user={user}
                     selectionType={selectionType}
+                    chartData={chartData}
                 />
 
             </div>

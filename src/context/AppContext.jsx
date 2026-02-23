@@ -67,6 +67,9 @@ export function AppContextProvider({ children }) {
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [activeRightPanel, setActiveRightPanel] = useState('properties'); // 'properties', 'settings', 'comments'
 
+    // Chart Data State
+    const [chartData, setChartData] = useState([]);
+
     // 3. Graph Logic Settings
     const [isBidirectionalEnabled, setIsBidirectionalEnabled] = useState(true);
 
@@ -89,7 +92,9 @@ export function AppContextProvider({ children }) {
             setActiveRightPanel,
             isBidirectionalEnabled,
             setIsBidirectionalEnabled,
-            updateProjectTitle
+            updateProjectTitle,
+            chartData,
+            setChartData
         }}>
             {children}
         </AppContext.Provider>

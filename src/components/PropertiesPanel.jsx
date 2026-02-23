@@ -7,9 +7,32 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-export default function PropertiesPanel({ project, editor, selectionType = 'document' }) {
+export default function PropertiesPanel({ project, editor, selectionType = 'document', chartData }) {
     const navigate = useNavigate();
     const [stats, setStats] = React.useState({ words: 0, characters: 0 });
+
+    const [localChartType, setLocalChartType] = React.useState('line');
+    const [localX, setLocalX] = React.useState('');
+    const [localY, setLocalY] = React.useState('');
+    const [localRows, setLocalRows] = React.useState(100);
+
+    React.useEffect(() => {
+        if (chartData && chartData.length > 0) {
+            const cols = Object.keys(chartData[0] || {});
+            if (!localX && cols.length > 0) setLocalX(cols[0]);
+            if (!localY && cols.length > 1) setLocalY(cols[1]);
+        }
+    }, [chartData, localX, localY]);
+
+    React.useEffect(() => {
+        if (selectionType === 'graph' && editor) {
+            const attrs = editor.getAttributes('graphBlock');
+            if (attrs.chartType) setLocalChartType(attrs.chartType);
+            if (attrs.xAxisKey) setLocalX(attrs.xAxisKey);
+            if (attrs.yAxisKey) setLocalY(attrs.yAxisKey);
+            if (attrs.rowLimit) setLocalRows(attrs.rowLimit);
+        }
+    }, [selectionType, editor]);
 
     React.useEffect(() => {
         if (!editor) return;
@@ -31,6 +54,42 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
             editor.off('update', updateStats);
         };
     }, [editor]);
+
+    const handleInsertGraph = () => {
+        if (!editor) return;
+
+        if (selectionType === 'graph') {
+            editor.chain().focus().updateAttributes('graphBlock', { chartType: localChartType, xAxisKey: localX, yAxisKey: localY, rowLimit: localRows }).run();
+            return;
+        }
+
+        let insertPos = editor.state.selection.to; // Default to current cursor position
+
+        // If the user's cursor is currently inside a table, we must escape it
+        if (editor.isActive('table')) {
+            const { $from } = editor.state.selection;
+            // Walk up the document tree to find the boundaries of the parent table
+            for (let d = $from.depth; d > 0; d--) {
+                const node = $from.node(d);
+                if (node.type.name === 'table') {
+                    // Set the insertion point to immediately AFTER the table node
+                    insertPos = $from.after(d);
+                    break;
+                }
+            }
+        }
+
+        // Insert the graph exactly at the calculated safe position
+        editor.chain().focus().insertContentAt(insertPos, {
+            type: 'graphBlock',
+            attrs: {
+                chartType: localChartType,
+                xAxisKey: localX,
+                yAxisKey: localY,
+                rowLimit: localRows
+            }
+        }).run();
+    };
 
     return (
         <div className="flex flex-col h-full bg-[#FAF7F5]">
@@ -161,68 +220,125 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
                     </div>
                 )}
 
-                {/* --- 3. TABLE PROPERTIES --- */}
-                {selectionType === 'table' && (
+                {/* --- 3. TABLE PROPERTIES AND GRAPH GENERATION --- */}
+                {(selectionType === 'table' || selectionType === 'graph') && (
                     <div className="mb-8">
-                        <h4 className="text-[10px] font-bold text-gray-400 tracking-wider mb-3 uppercase">Table Operations</h4>
+                        {selectionType === 'table' && (
+                            <>
+                                <h4 className="text-[10px] font-bold text-gray-400 tracking-wider mb-3 uppercase">Table Operations</h4>
+                                <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-4 shadow-sm mb-4">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            onClick={() => editor.chain().focus().addRowBefore().run()}
+                                            className="flex flex-col items-center justify-center p-3 rounded-xl bg-gray-50 hover:bg-blue-50 text-gray-600 hover:text-blue-600 border border-transparent hover:border-blue-100 transition-colors"
+                                        >
+                                            <ArrowUpToLine size={18} className="mb-1.5" />
+                                            <span className="text-[10px] font-bold">Add Row Above</span>
+                                        </button>
+                                        <button
+                                            onClick={() => editor.chain().focus().addRowAfter().run()}
+                                            className="flex flex-col items-center justify-center p-3 rounded-xl bg-gray-50 hover:bg-blue-50 text-gray-600 hover:text-blue-600 border border-transparent hover:border-blue-100 transition-colors"
+                                        >
+                                            <ArrowDownToLine size={18} className="mb-1.5" />
+                                            <span className="text-[10px] font-bold">Add Row Below</span>
+                                        </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            onClick={() => editor.chain().focus().addColumnBefore().run()}
+                                            className="flex flex-col items-center justify-center p-3 rounded-xl bg-gray-50 hover:bg-emerald-50 text-gray-600 hover:text-emerald-600 border border-transparent hover:border-emerald-100 transition-colors"
+                                        >
+                                            <ArrowLeftToLine size={18} className="mb-1.5" />
+                                            <span className="text-[10px] font-bold">Add Col Left</span>
+                                        </button>
+                                        <button
+                                            onClick={() => editor.chain().focus().addColumnAfter().run()}
+                                            className="flex flex-col items-center justify-center p-3 rounded-xl bg-gray-50 hover:bg-emerald-50 text-gray-600 hover:text-emerald-600 border border-transparent hover:border-emerald-100 transition-colors"
+                                        >
+                                            <ArrowRightToLine size={18} className="mb-1.5" />
+                                            <span className="text-[10px] font-bold">Add Col Right</span>
+                                        </button>
+                                    </div>
+
+                                    <div className="pt-2 border-t border-gray-100 grid grid-cols-3 gap-2">
+                                        <button
+                                            onClick={() => editor.chain().focus().deleteRow().run()}
+                                            className="col-span-1 flex flex-col items-center justify-center py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold transition-colors"
+                                        >
+                                            <span className="text-[9px]">Del Row</span>
+                                        </button>
+                                        <button
+                                            onClick={() => editor.chain().focus().deleteColumn().run()}
+                                            className="col-span-1 flex flex-col items-center justify-center py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold transition-colors"
+                                        >
+                                            <span className="text-[9px]">Del Col</span>
+                                        </button>
+                                        <button
+                                            onClick={() => editor.chain().focus().deleteTable().run()}
+                                            className="col-span-1 flex flex-col items-center justify-center py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-sm transition-colors"
+                                        >
+                                            <Trash2 size={12} className="mb-0.5" />
+                                            <span className="text-[9px]">Table</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        <h4 className="text-[10px] font-bold text-gray-400 tracking-wider mb-3 uppercase">
+                            {selectionType === 'graph' ? 'Graph Properties' : 'Generate Graph'}
+                        </h4>
                         <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-4 shadow-sm">
-
-                            <div className="grid grid-cols-2 gap-2">
-                                <button
-                                    onClick={() => editor.chain().focus().addRowBefore().run()}
-                                    className="flex flex-col items-center justify-center p-3 rounded-xl bg-gray-50 hover:bg-blue-50 text-gray-600 hover:text-blue-600 border border-transparent hover:border-blue-100 transition-colors"
+                            <div className="flex flex-col">
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 px-0.5">Chart Type</label>
+                                <select
+                                    className="bg-gray-50 border border-gray-200 text-gray-800 text-xs rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                                    value={localChartType}
+                                    onChange={e => setLocalChartType(e.target.value)}
                                 >
-                                    <ArrowUpToLine size={18} className="mb-1.5" />
-                                    <span className="text-[10px] font-bold">Add Row Above</span>
-                                </button>
-                                <button
-                                    onClick={() => editor.chain().focus().addRowAfter().run()}
-                                    className="flex flex-col items-center justify-center p-3 rounded-xl bg-gray-50 hover:bg-blue-50 text-gray-600 hover:text-blue-600 border border-transparent hover:border-blue-100 transition-colors"
-                                >
-                                    <ArrowDownToLine size={18} className="mb-1.5" />
-                                    <span className="text-[10px] font-bold">Add Row Below</span>
-                                </button>
+                                    <option value="line">Line Chart</option>
+                                    <option value="scatter">Scatter Plot</option>
+                                    <option value="bar">Bar Chart</option>
+                                    <option value="area">Area Chart</option>
+                                </select>
                             </div>
-
-                            <div className="grid grid-cols-2 gap-2">
-                                <button
-                                    onClick={() => editor.chain().focus().addColumnBefore().run()}
-                                    className="flex flex-col items-center justify-center p-3 rounded-xl bg-gray-50 hover:bg-emerald-50 text-gray-600 hover:text-emerald-600 border border-transparent hover:border-emerald-100 transition-colors"
+                            <div className="flex flex-col">
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 px-0.5">X-Axis</label>
+                                <select
+                                    className="bg-gray-50 border border-gray-200 text-gray-800 text-xs rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                                    value={localX}
+                                    onChange={e => setLocalX(e.target.value)}
                                 >
-                                    <ArrowLeftToLine size={18} className="mb-1.5" />
-                                    <span className="text-[10px] font-bold">Add Col Left</span>
-                                </button>
-                                <button
-                                    onClick={() => editor.chain().focus().addColumnAfter().run()}
-                                    className="flex flex-col items-center justify-center p-3 rounded-xl bg-gray-50 hover:bg-emerald-50 text-gray-600 hover:text-emerald-600 border border-transparent hover:border-emerald-100 transition-colors"
-                                >
-                                    <ArrowRightToLine size={18} className="mb-1.5" />
-                                    <span className="text-[10px] font-bold">Add Col Right</span>
-                                </button>
+                                    {chartData && chartData.length > 0 ? Object.keys(chartData[0]).map(col => <option key={col} value={col}>{col}</option>) : <option value="">No data</option>}
+                                </select>
                             </div>
-
-                            <div className="pt-2 border-t border-gray-100 grid grid-cols-3 gap-2">
-                                <button
-                                    onClick={() => editor.chain().focus().deleteRow().run()}
-                                    className="col-span-1 flex flex-col items-center justify-center py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold transition-colors"
+                            <div className="flex flex-col">
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 px-0.5">Y-Axis</label>
+                                <select
+                                    className="bg-gray-50 border border-gray-200 text-gray-800 text-xs rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                                    value={localY}
+                                    onChange={e => setLocalY(e.target.value)}
                                 >
-                                    <span className="text-[9px]">Del Row</span>
-                                </button>
-                                <button
-                                    onClick={() => editor.chain().focus().deleteColumn().run()}
-                                    className="col-span-1 flex flex-col items-center justify-center py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold transition-colors"
-                                >
-                                    <span className="text-[9px]">Del Col</span>
-                                </button>
-                                <button
-                                    onClick={() => editor.chain().focus().deleteTable().run()}
-                                    className="col-span-1 flex flex-col items-center justify-center py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-sm transition-colors"
-                                >
-                                    <Trash2 size={12} className="mb-0.5" />
-                                    <span className="text-[9px]">Table</span>
-                                </button>
+                                    {chartData && chartData.length > 0 ? Object.keys(chartData[0]).map(col => <option key={col} value={col}>{col}</option>) : <option value="">No data</option>}
+                                </select>
                             </div>
-
+                            <div className="flex flex-col">
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 px-0.5">Rows</label>
+                                <input
+                                    type="number"
+                                    className="bg-gray-50 border border-gray-200 text-gray-800 text-xs rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                                    value={localRows}
+                                    onChange={e => setLocalRows(Math.max(1, Number(e.target.value)))}
+                                    min="1"
+                                />
+                            </div>
+                            <button
+                                onClick={handleInsertGraph}
+                                className="w-full mt-2 py-2.5 bg-[#B7684C] hover:bg-[#9d5840] text-white font-bold text-xs rounded-lg shadow-sm transition-colors"
+                            >
+                                {selectionType === 'graph' ? 'Update Graph' : 'Insert Graph'}
+                            </button>
                         </div>
                     </div>
                 )}

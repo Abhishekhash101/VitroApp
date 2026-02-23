@@ -4,7 +4,7 @@ import GraphSettingsPanel from './GraphSettingsPanel';
 import PropertiesPanel from './PropertiesPanel';
 import { useAppContext } from '../context/AppContext';
 
-export default function RightSidebar({ comments, setComments, editor, user, selectionType }) {
+export default function RightSidebar({ comments, setComments, editor, user, selectionType, chartData }) {
     const { activeRightPanel, setActiveRightPanel } = useAppContext();
 
     return (
@@ -37,7 +37,7 @@ export default function RightSidebar({ comments, setComments, editor, user, sele
 
             <div className="px-6 pb-6 pt-0 overflow-y-auto flex-1 w-full">
                 {activeRightPanel === 'settings' && <GraphSettingsPanel />}
-                {activeRightPanel === 'properties' && <PropertiesPanel editor={editor} selectionType={selectionType} />}
+                {activeRightPanel === 'properties' && <PropertiesPanel editor={editor} selectionType={selectionType} chartData={chartData} />}
                 {activeRightPanel === 'comments' && <CommentsPanel comments={comments} setComments={setComments} editor={editor} user={user} />}
             </div>
 
