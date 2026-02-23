@@ -42,16 +42,44 @@
   /* Tailwind gray-50 */
 }
 
+/* The outer frame that the user can drag to resize */
 .tiptap .tableWrapper {
-  max-height: 300px;
-  overflow-y: auto;
-  overflow-x: auto;
-  border: 1px solid #e5e7eb;
+  max-height: 400px;
+  /* Default starting height */
+  min-height: 150px;
+  min-width: 300px;
+  resize: both;
+  /* THIS ENABLES THE CORNER DRAG HANDLE */
+  overflow: auto;
+  /* Required for resize to work */
+  border: 1px solid #d1d5db;
+  /* Tailwind gray-300 */
   border-radius: 8px;
   margin: 1.5rem 0;
+  background-color: #ffffff;
+  position: relative;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
 
-.tiptap table {
+/* The actual table inside the frame */
+.tiptap .tableWrapper table {
+  width: 100% !important;
+  height: 100%;
   margin: 0 !important;
   border: none !important;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+/* Style the column resize handles (TipTap native) */
+.tiptap .tableWrapper .column-resize-handle {
+  background-color: #3b82f6;
+  /* Tailwind blue-500 */
+  bottom: 0;
+  pointer-events: none;
+  position: absolute;
+  right: -2px;
+  top: 0;
+  width: 4px;
+  z-index: 20;
 }
