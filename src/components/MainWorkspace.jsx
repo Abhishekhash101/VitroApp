@@ -40,6 +40,7 @@ import TablePickerModal from './TablePickerModal';
 import GraphExtension from './GraphExtension';
 import SvgImportModal from './SvgImportModal';
 import NewProjectModal from './NewProjectModal';
+import ConfirmationModal from './ConfirmationModal';
 
 const FontSize = Extension.create({
     name: 'fontSize',
@@ -151,15 +152,14 @@ export default function MainWorkspace() {
 
     const handleDeleteProject = () => {
         if (!activeProject?.id) return;
-        if (window.confirm("Are you sure you want to delete this project?")) {
-            deleteProject(activeProject.id);
-            navigate('/dashboard');
-        }
+        setIsDeleteModalOpen(true);
     };
 
     const handleCreateNewProject = () => {
         setIsNewProjectModalOpen(true);
     };
+
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
     // Editable Title state 
     const [localTitle, setLocalTitle] = useState(activeProject?.name || "Untitled Analysis");
@@ -909,6 +909,19 @@ export default function MainWorkspace() {
 
             {/* New Project Modal */}
             <NewProjectModal />
+
+            <ConfirmationModal
+                isOpen={isDeleteModalOpen}
+                onClose={() => setIsDeleteModalOpen(false)}
+                title="Delete Project"
+                message="Are you sure you want to delete this project? This action cannot be undone and the data will be lost."
+                confirmText="Delete Project"
+                isDestructive={true}
+                onConfirm={() => {
+                    deleteProject(activeProject?.id);
+                    navigate('/dashboard');
+                }}
+            />
         </div>
     );
 }

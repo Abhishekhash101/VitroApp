@@ -1,18 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Folder, Users, Star, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
+import ConfirmationModal from './ConfirmationModal';
 
 export default function Sidebar({ isCollapsed, toggleSidebar, activeProjectId }) {
     const navigate = useNavigate();
     const { deleteProject } = useAppContext();
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
     const handleDelete = () => {
         if (!activeProjectId) return;
-        if (window.confirm("Are you sure you want to delete this project?")) {
-            deleteProject(activeProjectId);
-            navigate('/dashboard');
-        }
+        setIsDeleteModalOpen(true);
     };
 
     return (
@@ -65,6 +64,19 @@ export default function Sidebar({ isCollapsed, toggleSidebar, activeProjectId })
                     75% of 2TB used
                 </div>
             </div>
+
+            <ConfirmationModal
+                isOpen={isDeleteModalOpen}
+                onClose={() => setIsDeleteModalOpen(false)}
+                title="Delete Project"
+                message="Are you sure you want to delete this project? This action cannot be undone and the data will be lost."
+                confirmText="Delete Project"
+                isDestructive={true}
+                onConfirm={() => {
+                    deleteProject(activeProjectId);
+                    navigate('/dashboard');
+                }}
+            />
         </div>
     );
 }
