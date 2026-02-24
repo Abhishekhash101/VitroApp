@@ -39,6 +39,7 @@ import SymbolPickerModal from './SymbolPickerModal';
 import TablePickerModal from './TablePickerModal';
 import GraphExtension from './GraphExtension';
 import SvgImportModal from './SvgImportModal';
+import NewProjectModal from './NewProjectModal';
 
 const FontSize = Extension.create({
     name: 'fontSize',
@@ -101,7 +102,11 @@ export default function MainWorkspace() {
         setActiveRightPanel,
         updateProjectTitle,
         chartData,
-        setChartData
+        setChartData,
+        deleteProject,
+        createNewProject,
+        setIsNewProjectModalOpen,
+        updateProjectContent
     } = useAppContext();
 
     // Dynamic CSV States (Phase 5)
@@ -143,6 +148,18 @@ export default function MainWorkspace() {
 
     // Find the current project meta
     const activeProject = projects.find(p => p.id === (projectId || ''));
+
+    const handleDeleteProject = () => {
+        if (!activeProject?.id) return;
+        if (window.confirm("Are you sure you want to delete this project?")) {
+            deleteProject(activeProject.id);
+            navigate('/dashboard');
+        }
+    };
+
+    const handleCreateNewProject = () => {
+        setIsNewProjectModalOpen(true);
+    };
 
     // Editable Title state 
     const [localTitle, setLocalTitle] = useState(activeProject?.name || "Untitled Analysis");
@@ -295,6 +312,11 @@ export default function MainWorkspace() {
             if (documentChartData.length > 0) {
                 setChartData(documentChartData);
             }
+
+            // Sync with Global Persistence
+            if (activeProject?.id) {
+                updateProjectContent(activeProject.id, editor.getHTML());
+            }
         },
         editorProps: {
             attributes: {
@@ -303,6 +325,17 @@ export default function MainWorkspace() {
             },
         },
     });
+
+    // Sync Editor Content when Project Changes
+    useEffect(() => {
+        if (!editor || !activeProject) return;
+        // Only update if the editor content is different from the project content
+        // (This prevents cursor jumping loops)
+        const currentContent = editor.getHTML();
+        if (currentContent !== activeProject.content) {
+            editor.commands.setContent(activeProject.content || "");
+        }
+    }, [activeProject?.id, editor]); // Dependency on ID is crucial!
 
     useEffect(() => {
         if (!editor) return;
@@ -528,17 +561,16 @@ export default function MainWorkspace() {
                     <span className="font-extrabold text-[#3E2A2F] text-xl tracking-tight">Vitro Workspace</span>
                 </a>
 
-                {/* Center-Right: Links */}
-                <nav className="hidden md:flex items-center gap-8 text-[#62414A]">
-                    <a href="/" className="font-semibold text-[15px] hover:text-[#3E2A2F] transition-colors">Dashboard</a>
-                    <a href="/workspace" className="font-bold text-[15px] text-[#3E2A2F]">Projects</a>
-                    <a href="#" className="font-semibold text-[15px] hover:text-[#3E2A2F] transition-colors">Templates</a>
-                    <a href="#" className="font-semibold text-[15px] hover:text-[#3E2A2F] transition-colors">Help</a>
-                </nav>
+                {/* Center: Dashboard Link */}
+                <div className="flex-1 flex items-center justify-center gap-6 md:gap-8 z-10 hidden md:flex">
+                    <button onClick={() => navigate('/dashboard')} className="text-sm font-bold text-[#3E2A2F]/70 hover:text-[#3E2A2F] transition-colors">Dashboard</button>
+                </div>
 
-                {/* Right: Actions & User */}
-                <div className="flex items-center gap-5">
-                    <button className="hidden sm:block px-6 py-2.5 rounded-full border-2 border-[#B7684C] text-[#B7684C] font-bold text-sm tracking-wide hover:bg-[#B7684C]/5 transition-colors">
+                <div className="flex items-center gap-4 z-10 shrink-0 bg-white/40 p-1.5 pr-2 rounded-full border border-white/40 shadow-sm backdrop-blur-md hidden sm:flex">
+                    <button
+                        onClick={handleCreateNewProject}
+                        className="text-xs font-bold px-4 md:px-6 py-2 md:py-2.5 rounded-full border border-[#B7684C] text-[#B7684C] hover:bg-[#B7684C] hover:text-white transition-all shadow-sm"
+                    >
                         New Project
                     </button>
                     <a href="/settings" className="h-10 w-10 rounded-full border-2 border-white shadow-sm overflow-hidden shrink-0 block hover:opacity-90 transition-opacity">
@@ -617,10 +649,14 @@ export default function MainWorkspace() {
                             <Download size={isLeftSidebarCollapsed ? 20 : 18} />
                             {!isLeftSidebarCollapsed && 'Export PDF'}
                         </button>
-                        <a href="#" className={`flex items-center gap-3 text-[#3E2A2F]/60 font-medium text-sm hover:text-[#3E2A2F]/80 transition-colors ${isLeftSidebarCollapsed ? 'justify-center p-2' : ''}`}>
+                        <button
+                            onClick={handleDeleteProject}
+                            className={`flex w-full items-center gap-3 text-[#3E2A2F]/60 font-medium text-sm hover:text-[#3E2A2F]/80 transition-colors ${isLeftSidebarCollapsed ? 'justify-center p-2' : 'text-left'}`}
+                            title="Delete active project"
+                        >
                             <Trash2 size={isLeftSidebarCollapsed ? 20 : 18} />
                             {!isLeftSidebarCollapsed && 'Trash'}
-                        </a>
+                        </button>
                     </div>
                 </div>
 
@@ -833,6 +869,7 @@ export default function MainWorkspace() {
                     chartData={chartData}
                     isCollapsed={isRightSidebarCollapsed}
                     toggleSidebar={() => setIsRightSidebarCollapsed(!isRightSidebarCollapsed)}
+                    activeProjectId={activeProject?.id}
                 />
 
             </div>
@@ -869,6 +906,9 @@ export default function MainWorkspace() {
                 svgData={pendingSvg}
                 editor={editor}
             />
+
+            {/* New Project Modal */}
+            <NewProjectModal />
         </div>
     );
 }

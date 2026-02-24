@@ -17,16 +17,19 @@ export function AppContextProvider({ children }) {
     // 2. Dynamic Projects State (Starts Empty as per Phase 3)
     const [projects, setProjects] = useState([]);
 
-    const createNewProject = (title) => {
+    const createNewProject = (customTitle) => {
+        const titleToUse = customTitle && customTitle.trim() !== "" ? customTitle : "Untitled Analysis";
         const newProject = {
             id: Date.now().toString(),
-            name: title,
+            name: titleToUse,
             owner: user?.name || "CurrentUser",
             date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
             size: '0 KB',
             type: 'folder',
             status: 'green',
             selected: false,
+            content: "",
+            lastModified: Date.now(),
             files: [],
             collaborators: []
         };
@@ -61,6 +64,15 @@ export function AppContextProvider({ children }) {
         });
     };
 
+    const updateProjectContent = (projectId, newContent) => {
+        setProjects(prev => prev.map(p => {
+            if (p.id === projectId) {
+                return { ...p, content: newContent, lastModified: Date.now() };
+            }
+            return p;
+        }));
+    };
+
     // 4. Modal and Panel States
     const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -73,29 +85,29 @@ export function AppContextProvider({ children }) {
     // 3. Graph Logic Settings
     const [isBidirectionalEnabled, setIsBidirectionalEnabled] = useState(true);
 
+    const value = {
+        user,
+        login,
+        logout,
+        projects,
+        createNewProject,
+        deleteProject,
+        addFileToProject,
+        isNewProjectModalOpen,
+        setIsNewProjectModalOpen,
+        isShareModalOpen,
+        setIsShareModalOpen,
+        isExportModalOpen, setIsExportModalOpen,
+        isBidirectionalEnabled, setIsBidirectionalEnabled,
+        activeRightPanel, setActiveRightPanel,
+        updateProjectTitle,
+        updateProjectContent,
+        chartData,
+        setChartData
+    };
+
     return (
-        <AppContext.Provider value={{
-            user,
-            login,
-            logout,
-            projects,
-            createNewProject,
-            deleteProject,
-            addFileToProject,
-            isNewProjectModalOpen,
-            setIsNewProjectModalOpen,
-            isShareModalOpen,
-            setIsShareModalOpen,
-            isExportModalOpen,
-            setIsExportModalOpen,
-            activeRightPanel,
-            setActiveRightPanel,
-            isBidirectionalEnabled,
-            setIsBidirectionalEnabled,
-            updateProjectTitle,
-            chartData,
-            setChartData
-        }}>
+        <AppContext.Provider value={value}>
             {children}
         </AppContext.Provider>
     );

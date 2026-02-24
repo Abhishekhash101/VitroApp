@@ -1,7 +1,20 @@
 import React from 'react';
 import { Folder, Users, Star, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useAppContext } from '../context/AppContext';
 
-export default function Sidebar({ isCollapsed, toggleSidebar }) {
+export default function Sidebar({ isCollapsed, toggleSidebar, activeProjectId }) {
+    const navigate = useNavigate();
+    const { deleteProject } = useAppContext();
+
+    const handleDelete = () => {
+        if (!activeProjectId) return;
+        if (window.confirm("Are you sure you want to delete this project?")) {
+            deleteProject(activeProjectId);
+            navigate('/dashboard');
+        }
+    };
+
     return (
         <div className={`bg-[#8B5F54] text-[#FDF6F0] flex flex-col h-full shrink-0 overflow-hidden whitespace-nowrap transition-all duration-300 ease-in-out ${isCollapsed ? 'w-16' : 'w-64'}`}>
             <div className={`flex-1 py-8 px-4 relative`}>
@@ -30,10 +43,14 @@ export default function Sidebar({ isCollapsed, toggleSidebar }) {
                         <span className={`transition-opacity duration-200 ${isCollapsed ? 'opacity-0 w-0' : 'opacity-100'}`}>Starred</span>
                     </a>
 
-                    <a href="#" className={`flex items-center gap-3 py-2.5 text-white/80 hover:bg-white/10 rounded-lg font-medium transition-colors ${isCollapsed ? 'justify-center px-0' : 'px-3'}`}>
+                    <button
+                        onClick={handleDelete}
+                        className={`w-full flex items-center gap-3 py-2.5 text-white/80 hover:bg-white/10 rounded-lg font-medium transition-colors ${isCollapsed ? 'justify-center px-0' : 'px-3'}`}
+                        title="Delete active project"
+                    >
                         <Trash2 size={20} className="shrink-0" />
-                        <span className={`transition-opacity duration-200 ${isCollapsed ? 'opacity-0 w-0' : 'opacity-100'}`}>Trash</span>
-                    </a>
+                        <span className={`transition-opacity duration-200 text-left ${isCollapsed ? 'opacity-0 w-0' : 'opacity-100'}`}>Trash</span>
+                    </button>
                 </nav>
             </div>
 

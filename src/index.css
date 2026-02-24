@@ -99,3 +99,32 @@
   display: flex;
   flex-direction: column;
 }
+
+/* Global Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  /* For horizontal scrollbars */
+}
+
+/* The Track (Background) */
+::-webkit-scrollbar-track {
+  background: #FDF6F0;
+  /* Your App Background Color */
+  border-radius: 5px;
+}
+
+/* The Handle (The moving part) */
+::-webkit-scrollbar-thumb {
+  background: #C4A498;
+  /* A lighter shade of your sidebar for subtlety */
+  border-radius: 5px;
+  border: 2px solid #FDF6F0;
+  /* Creates a nice padding effect */
+}
+
+/* Handle on Hover */
+::-webkit-scrollbar-thumb:hover {
+  background: #8B5F54;
+  /* Your Main Sidebar Color on hover */
+}
