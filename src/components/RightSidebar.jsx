@@ -9,7 +9,7 @@ export default function RightSidebar({ comments, setComments, editor, user, sele
     const { activeRightPanel, setActiveRightPanel } = useAppContext();
 
     return (
-        <div className={`hidden xl:flex flex-col bg-gradient-to-b from-[#62414A] to-[#B7684C] flex-shrink-0 z-10 m-4 lg:m-6 rounded-3xl overflow-hidden whitespace-nowrap shadow-lg border border-white/10 transition-all duration-300 ease-in-out ${isCollapsed ? 'w-20' : 'w-72'}`}>
+        <div className={`hidden xl:flex flex-col bg-gradient-to-b from-[#62414A] to-[#B7684C] flex-shrink-0 z-10 m-0 rounded-none overflow-hidden whitespace-nowrap shadow-lg border-l border-[#D8C7B9] transition-all duration-300 ease-in-out ${isCollapsed ? 'w-20' : 'w-72'}`}>
 
             {/* Header / Toggle */}
             <div className={`flex ${isCollapsed ? 'justify-center p-4 pb-0' : 'justify-start px-6 pt-4 pb-0'}`}>

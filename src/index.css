@@ -128,3 +128,32 @@
   background: #8B5F54;
   /* Your Main Sidebar Color on hover */
 }
+
+/* Tighten up the "Word Processor" feel */
+.ProseMirror p {
+  margin-top: 0.25em !important;
+  margin-bottom: 0.25em !important;
+  line-height: 1.4 !important;
+  /* Standard document line height */
+}
+
+/* Adjust Headings to sit closer to text */
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3 {
+  margin-top: 1em !important;
+  margin-bottom: 0.5em !important;
+}
+
+/* Remove huge gaps in lists */
+.ProseMirror ul,
+.ProseMirror ol {
+  padding-left: 1.5em !important;
+  margin-top: 0.25em !important;
+  margin-bottom: 0.25em !important;
+}
+
+.ProseMirror li {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}

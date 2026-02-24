@@ -551,14 +551,14 @@ export default function MainWorkspace() {
         <div className="h-screen flex flex-col font-sans w-full bg-[#E5D7CC] overflow-hidden">
 
             {/* Top Navigation */}
-            <div className="h-20 bg-[#F4EBE1] border-b border-[#D8C7B9] px-6 lg:px-10 flex items-center justify-between shrink-0 z-20">
+            <div className="h-14 bg-[#F4EBE1] border-b border-[#D8C7B9] px-6 lg:px-10 flex items-center justify-between shrink-0 z-20">
 
                 {/* Left: Logo */}
                 <a href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-                    <div className="w-9 h-9 rounded-xl bg-[#62414A] flex items-center justify-center text-white shadow-sm">
-                        <FlaskConical size={20} strokeWidth={2.5} />
+                    <div className="w-7 h-7 rounded-lg bg-[#62414A] flex items-center justify-center text-white shadow-sm">
+                        <FlaskConical size={16} strokeWidth={2.5} />
                     </div>
-                    <span className="font-extrabold text-[#3E2A2F] text-xl tracking-tight">Vitro Workspace</span>
+                    <span className="font-extrabold text-[#3E2A2F] text-lg tracking-tight">Vitro Workspace</span>
                 </a>
 
                 {/* Center: Dashboard Link */}
@@ -566,14 +566,14 @@ export default function MainWorkspace() {
                     <button onClick={() => navigate('/dashboard')} className="text-sm font-bold text-[#3E2A2F]/70 hover:text-[#3E2A2F] transition-colors">Dashboard</button>
                 </div>
 
-                <div className="flex items-center gap-4 z-10 shrink-0 bg-white/40 p-1.5 pr-2 rounded-full border border-white/40 shadow-sm backdrop-blur-md hidden sm:flex">
+                <div className="flex items-center gap-3 z-10 shrink-0 bg-white/40 p-1 pr-1.5 rounded-full border border-white/40 shadow-sm backdrop-blur-md hidden sm:flex">
                     <button
                         onClick={handleCreateNewProject}
-                        className="text-xs font-bold px-4 md:px-6 py-2 md:py-2.5 rounded-full border border-[#B7684C] text-[#B7684C] hover:bg-[#B7684C] hover:text-white transition-all shadow-sm"
+                        className="text-[11px] font-bold px-3 md:px-4 py-1.5 md:py-2 rounded-full border border-[#B7684C] text-[#B7684C] hover:bg-[#B7684C] hover:text-white transition-all shadow-sm"
                     >
                         New Project
                     </button>
-                    <a href="/settings" className="h-10 w-10 rounded-full border-2 border-white shadow-sm overflow-hidden shrink-0 block hover:opacity-90 transition-opacity">
+                    <a href="/settings" className="h-8 w-8 rounded-full border-2 border-white shadow-sm overflow-hidden shrink-0 block hover:opacity-90 transition-opacity">
                         <img
                             src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
                             alt="User Avatar"
@@ -585,10 +585,10 @@ export default function MainWorkspace() {
             </div>
 
             {/* Main Body Wrapper */}
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex overflow-hidden bg-[#FDF6F0] gap-0">
 
                 {/* Column 1: Left Workbench Sidebar */}
-                <div className={`hidden md:flex flex-col bg-gradient-to-b from-[#62414A] to-[#B7684C] flex-shrink-0 z-10 m-4 lg:m-6 rounded-3xl overflow-hidden shadow-lg border border-white/10 transition-all duration-300 ${isLeftSidebarCollapsed ? 'w-20' : 'w-72'}`}>
+                <div className={`hidden md:flex flex-col bg-gradient-to-b from-[#62414A] to-[#B7684C] flex-shrink-0 z-10 m-0 rounded-none overflow-hidden shadow-lg border-r border-[#D8C7B9] transition-all duration-300 ${isLeftSidebarCollapsed ? 'w-20' : 'w-72'}`}>
                     <div className={`p-6 pb-2 flex items-center ${isLeftSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
                         {!isLeftSidebarCollapsed && <h2 className="text-[#3E2A2F] font-bold text-lg whitespace-nowrap">Project Workbench</h2>}
                         <button
@@ -662,12 +662,12 @@ export default function MainWorkspace() {
 
                 {/* Column 2: Center Editor */}
                 <div
-                    className={`flex-1 bg-white my-4 lg:my-6 rounded-3xl shadow-lg border border-gray-100 overflow-y-auto z-0 flex flex-col transition-all duration-300 ease-in-out`}
+                    className={`flex-1 flex flex-col bg-white shadow-sm border-x border-stone-200 h-full overflow-y-auto px-8 lg:px-12 transition-all duration-300 ease-in-out m-0 rounded-none z-0`}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={handleDrop}
                 >
 
-                    <div className={`w-full mx-auto py-10 transition-all duration-300 ease-in-out ${isFluidMode ? 'max-w-[95%] px-8' : 'max-w-5xl px-12'}`}>
+                    <div className={`w-full py-10 transition-all duration-300 ease-in-out`}>
 
                         {/* Top Bar inside Editor */}
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-14">
