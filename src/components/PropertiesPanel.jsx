@@ -15,6 +15,9 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
     const [localX, setLocalX] = React.useState('');
     const [localY, setLocalY] = React.useState('');
     const [localRows, setLocalRows] = React.useState(100);
+    const [localXLabel, setLocalXLabel] = React.useState('');
+    const [localYLabel, setLocalYLabel] = React.useState('');
+    const [localLegends, setLocalLegends] = React.useState([]);
 
     React.useEffect(() => {
         if (chartData && chartData.length > 0) {
@@ -31,6 +34,9 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
             if (attrs.xAxisKey) setLocalX(attrs.xAxisKey);
             if (attrs.yAxisKey) setLocalY(attrs.yAxisKey);
             if (attrs.rowLimit) setLocalRows(attrs.rowLimit);
+            if (attrs.xAxisLabel !== undefined) setLocalXLabel(attrs.xAxisLabel);
+            if (attrs.yAxisLabel !== undefined) setLocalYLabel(attrs.yAxisLabel);
+            if (attrs.legends) setLocalLegends(Array.isArray(attrs.legends) ? attrs.legends : []);
         }
     }, [selectionType, editor]);
 
@@ -59,7 +65,7 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
         if (!editor) return;
 
         if (selectionType === 'graph') {
-            editor.chain().focus().updateAttributes('graphBlock', { chartType: localChartType, xAxisKey: localX, yAxisKey: localY, rowLimit: localRows }).run();
+            editor.chain().focus().updateAttributes('graphBlock', { chartType: localChartType, xAxisKey: localX, yAxisKey: localY, rowLimit: localRows, xAxisLabel: localXLabel, yAxisLabel: localYLabel, legends: localLegends }).run();
             return;
         }
 
@@ -86,13 +92,16 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
                 chartType: localChartType,
                 xAxisKey: localX,
                 yAxisKey: localY,
-                rowLimit: localRows
+                rowLimit: localRows,
+                xAxisLabel: localXLabel,
+                yAxisLabel: localYLabel,
+                legends: localLegends
             }
         }).run();
     };
 
     return (
-        <div className="flex flex-col h-full bg-[#FAF7F5]">
+        <div className="flex flex-col h-full bg-[#FAF7F5] overflow-hidden whitespace-nowrap">
 
 
             <div className="px-6 py-4 flex-1 overflow-y-auto">
@@ -340,6 +349,77 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
                                 {selectionType === 'graph' ? 'Update Graph' : 'Insert Graph'}
                             </button>
                         </div>
+
+                        {/* ── ANALYSIS DATA INSPECTOR (only for selected graphs) ── */}
+                        {selectionType === 'graph' && (
+                            <div className="mt-4">
+                                <h4 className="text-[10px] font-bold text-gray-400 tracking-wider mb-3 uppercase">📊 Analysis Data</h4>
+                                <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-4 shadow-sm">
+
+                                    {/* X-Axis Label */}
+                                    <div className="flex flex-col">
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 px-0.5">X-Axis Label</label>
+                                        <input
+                                            type="text"
+                                            className="bg-gray-50 border border-gray-200 text-gray-800 text-xs rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-[#B7684C]/50"
+                                            value={localXLabel}
+                                            onChange={e => {
+                                                setLocalXLabel(e.target.value);
+                                                editor?.chain().focus().updateAttributes('graphBlock', { xAxisLabel: e.target.value }).run();
+                                            }}
+                                            placeholder="e.g. Wavelength (nm)"
+                                        />
+                                    </div>
+
+                                    {/* Y-Axis Label */}
+                                    <div className="flex flex-col">
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 px-0.5">Y-Axis Label</label>
+                                        <input
+                                            type="text"
+                                            className="bg-gray-50 border border-gray-200 text-gray-800 text-xs rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-[#B7684C]/50"
+                                            value={localYLabel}
+                                            onChange={e => {
+                                                setLocalYLabel(e.target.value);
+                                                editor?.chain().focus().updateAttributes('graphBlock', { yAxisLabel: e.target.value }).run();
+                                            }}
+                                            placeholder="e.g. Intensity (arb. units)"
+                                        />
+                                    </div>
+
+                                    {/* Legend Names */}
+                                    {localLegends.length > 0 && (
+                                        <div className="flex flex-col">
+                                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 px-0.5">Legend Names</label>
+                                            <div className="space-y-2">
+                                                {localLegends.map((legend, i) => (
+                                                    <input
+                                                        key={i}
+                                                        type="text"
+                                                        className="w-full bg-gray-50 border border-gray-200 text-gray-800 text-xs rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-[#B7684C]/50"
+                                                        value={legend}
+                                                        onChange={e => {
+                                                            const updated = [...localLegends];
+                                                            updated[i] = e.target.value;
+                                                            setLocalLegends(updated);
+                                                            editor?.chain().focus().updateAttributes('graphBlock', { legends: updated }).run();
+                                                        }}
+                                                        placeholder={`Legend ${i + 1}`}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Open Data Table */}
+                                    <button
+                                        onClick={() => alert('Opening Data View...')}
+                                        className="w-full py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold text-xs rounded-lg border border-gray-200 transition-colors"
+                                    >
+                                        Open Data Table
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 

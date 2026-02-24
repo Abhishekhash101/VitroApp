@@ -11,7 +11,10 @@ export default Node.create({
             chartType: { default: 'line' },
             xAxisKey: { default: '' },
             yAxisKey: { default: '' },
-            rowLimit: { default: 100 }
+            rowLimit: { default: 100 },
+            xAxisLabel: { default: '' },
+            yAxisLabel: { default: '' },
+            legends: { default: [] },
         };
     },
     parseHTML() {

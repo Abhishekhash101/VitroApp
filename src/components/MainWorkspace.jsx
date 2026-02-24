@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-    FlaskConical, ChevronDown, Folder, FileText, BarChart2, Option,
+    FlaskConical, ChevronDown, ChevronLeft, ChevronRight, Folder, FileText, BarChart2, Option,
     Settings, Download, Trash2, Cloud, Share, CheckCircle2, Save, Upload,
     Clock, Image as ImageIcon, Bold, Italic, Underline as UnderlineIcon, Strikethrough,
     Heading1, Heading2, List, ListOrdered, Quote,
@@ -38,6 +38,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import SymbolPickerModal from './SymbolPickerModal';
 import TablePickerModal from './TablePickerModal';
 import GraphExtension from './GraphExtension';
+import SvgImportModal from './SvgImportModal';
 
 const FontSize = Extension.create({
     name: 'fontSize',
@@ -122,6 +123,17 @@ export default function MainWorkspace() {
 
     // Contextual Inspector (Phase 17)
     const [selectionType, setSelectionType] = useState('document');
+
+    // SVG Drag & Drop Data Extraction
+    const [pendingSvg, setPendingSvg] = useState(null);
+    const [isSvgModalOpen, setIsSvgModalOpen] = useState(false);
+
+    // Sidebar Collapsed States
+    const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
+    const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false);
+
+    // Calculate Fluid Mode
+    const isFluidMode = isLeftSidebarCollapsed || isRightSidebarCollapsed;
 
     useEffect(() => {
         const handleOpen = () => setIsSymbolPickerOpen(true);
@@ -386,7 +398,13 @@ export default function MainWorkspace() {
             const reader = new FileReader();
 
             reader.onload = () => {
-                if (isImage && editor) {
+                if (file.type === 'image/svg+xml') {
+                    // Read as text for XML parsing; build a data URL for preview
+                    const svgText = reader.result;
+                    const dataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgText)));
+                    setPendingSvg({ url: dataUrl, name: file.name, rawSvg: svgText });
+                    setIsSvgModalOpen(true);
+                } else if (isImage && editor) {
                     editor.chain().focus().setImage({ src: reader.result }).run();
                 } else if (file.name.endsWith('.csv') || file.type === 'text/csv' || file.name.endsWith('.txt')) {
                     setIsImporting(true);
@@ -413,7 +431,10 @@ export default function MainWorkspace() {
                     }, 100);
                 }
             };
-            if (isImage) {
+            // SVGs must be read as text for XML parsing
+            if (file.type === 'image/svg+xml') {
+                reader.readAsText(file);
+            } else if (isImage) {
                 reader.readAsDataURL(file);
             } else {
                 reader.readAsText(file);
@@ -427,7 +448,14 @@ export default function MainWorkspace() {
             if (!data) return;
             const fileObject = JSON.parse(data);
 
-            if (fileObject.type.startsWith('image/') && editor) {
+            if (fileObject.type === 'image/svg+xml') {
+                // fileObject.data might be a data URL or raw text depending on how it was imported
+                const isDataUrl = fileObject.data?.startsWith('data:');
+                const rawSvg = isDataUrl ? atob(fileObject.data.split(',')[1] || '') : fileObject.data;
+                const url = isDataUrl ? fileObject.data : 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(fileObject.data)));
+                setPendingSvg({ url, name: fileObject.name, rawSvg });
+                setIsSvgModalOpen(true);
+            } else if (fileObject.type.startsWith('image/') && editor) {
                 editor.chain().focus().setImage({ src: fileObject.data }).run();
             } else if (fileObject.name.endsWith('.csv') || fileObject.type === 'text/csv' || fileObject.name.endsWith('.txt')) {
                 setIsImporting(true);
@@ -528,79 +556,82 @@ export default function MainWorkspace() {
             <div className="flex-1 flex overflow-hidden">
 
                 {/* Column 1: Left Workbench Sidebar */}
-                <div className="w-72 hidden md:flex flex-col bg-gradient-to-b from-[#62414A] to-[#B7684C] flex-shrink-0 z-10 m-4 lg:m-6 rounded-3xl overflow-hidden shadow-lg border border-white/10">
+                <div className={`hidden md:flex flex-col bg-gradient-to-b from-[#62414A] to-[#B7684C] flex-shrink-0 z-10 m-4 lg:m-6 rounded-3xl overflow-hidden shadow-lg border border-white/10 transition-all duration-300 ${isLeftSidebarCollapsed ? 'w-20' : 'w-72'}`}>
+                    <div className={`p-6 pb-2 flex items-center ${isLeftSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
+                        {!isLeftSidebarCollapsed && <h2 className="text-[#3E2A2F] font-bold text-lg whitespace-nowrap">Project Workbench</h2>}
+                        <button
+                            onClick={() => setIsLeftSidebarCollapsed(!isLeftSidebarCollapsed)}
+                            className="text-[#3E2A2F] hover:bg-white/10 p-1 rounded-md transition-colors"
+                        >
+                            {isLeftSidebarCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+                        </button>
+                    </div>
 
-                    <div className="p-6">
-                        <h2 className="text-[#3E2A2F] font-bold text-lg mb-4">Project Workbench</h2>
-                        <div className="w-full h-px bg-[#3E2A2F]/20 mb-6"></div>
+                    {!isLeftSidebarCollapsed && <div className="w-full h-px bg-[#3E2A2F]/20 mb-4 px-6"></div>}
 
-                        {/* File Tree */}
-                        <div className="space-y-3">
+                    {/* File Tree */}
+                    <div className={`space-y-3 pb-6 overflow-y-auto overflow-x-hidden flex-1 ${isLeftSidebarCollapsed ? 'px-2 items-center flex flex-col' : 'px-6'}`}>
+                        <div className={`flex items-center bg-[#F4EBE1]/90 rounded-xl shadow-sm cursor-pointer border border-[#D8C7B9]/50 ${isLeftSidebarCollapsed ? 'p-3 justify-center w-12 h-12 shrink-0' : 'justify-between px-4 py-3'}`}>
+                            <div className={`flex items-center text-[#3E2A2F] font-semibold text-sm truncate ${isLeftSidebarCollapsed ? '' : 'gap-3 pr-2'}`}>
+                                <Folder size={isLeftSidebarCollapsed ? 20 : 18} className="text-[#B7684C] shrink-0" fill="currentColor" />
+                                {!isLeftSidebarCollapsed && <span className="truncate">{activeProject?.name || 'Untitled Project'}</span>}
+                            </div>
+                            {!isLeftSidebarCollapsed && <ChevronDown size={16} className="text-[#3E2A2F] shrink-0" />}
+                        </div>
 
-                            <div className="flex justify-between items-center bg-[#F4EBE1]/90 rounded-xl px-4 py-3 shadow-sm cursor-pointer border border-[#D8C7B9]/50">
-                                <div className="flex items-center gap-3 text-[#3E2A2F] font-semibold text-sm truncate pr-2">
-                                    <Folder size={18} className="text-[#B7684C] shrink-0" fill="currentColor" />
-                                    <span className="truncate">{activeProject?.name || 'Untitled Project'}</span>
-                                </div>
-                                <ChevronDown size={16} className="text-[#3E2A2F] shrink-0" />
+                        <div className={`${isLeftSidebarCollapsed ? 'space-y-4 pt-4 flex flex-col items-center w-full' : 'pl-4 space-y-3'}`}>
+                            <div className={`flex items-center bg-white/95 rounded-xl shadow-sm cursor-pointer hover:bg-white transition-colors ${isLeftSidebarCollapsed ? 'justify-center w-12 h-12 shrink-0' : 'gap-3 px-4 py-3 border-l-4 border-[#B7684C]'}`}>
+                                <FileText size={isLeftSidebarCollapsed ? 20 : 18} className="text-[#B7684C] shrink-0" />
+                                {!isLeftSidebarCollapsed && <span className="text-[#3E2A2F] font-bold text-sm truncate">{activeProject?.name || 'Untitled'}.docx</span>}
                             </div>
 
-                            <div className="pl-4 space-y-3">
-                                <div className="flex items-center gap-3 bg-white/95 rounded-xl px-4 py-3 shadow-sm cursor-pointer hover:bg-white transition-colors border-l-4 border-[#B7684C]">
-                                    <FileText size={18} className="text-[#B7684C] shrink-0" />
-                                    <span className="text-[#3E2A2F] font-bold text-sm truncate">{activeProject?.name || 'Untitled'}.docx</span>
+                            {activeProject?.files?.map((f) => (
+                                <div
+                                    key={f.id}
+                                    draggable="true"
+                                    onDragStart={(e) => handleDragStart(e, f)}
+                                    className={`flex items-center bg-white/95 rounded-xl shadow-sm cursor-grab hover:bg-white transition-colors border border-transparent hover:border-blue-200/50 ${isLeftSidebarCollapsed ? 'justify-center w-12 h-12 shrink-0' : 'gap-3 px-4 py-3'}`}
+                                >
+                                    {f.type.startsWith('image/') ? <ImageIcon size={isLeftSidebarCollapsed ? 20 : 18} className="text-blue-400 shrink-0" /> : <BarChart2 size={isLeftSidebarCollapsed ? 20 : 18} className="text-emerald-500 shrink-0" />}
+                                    {!isLeftSidebarCollapsed && <span className="text-[#3E2A2F] font-medium text-sm truncate" title={f.name}>{f.name}</span>}
                                 </div>
+                            ))}
 
-                                {activeProject?.files?.map((f) => (
-                                    <div
-                                        key={f.id}
-                                        draggable="true"
-                                        onDragStart={(e) => handleDragStart(e, f)}
-                                        className="flex items-center gap-3 bg-white/95 rounded-xl px-4 py-3 shadow-sm cursor-grab hover:bg-white transition-colors border border-transparent hover:border-blue-200/50"
-                                    >
-                                        {f.type.startsWith('image/') ? <ImageIcon size={18} className="text-blue-400 shrink-0" /> : <BarChart2 size={18} className="text-emerald-500 shrink-0" />}
-                                        <span className="text-[#3E2A2F] font-medium text-sm truncate" title={f.name}>{f.name}</span>
-                                    </div>
-                                ))}
-
-                                <label className="flex items-center justify-center gap-2 bg-transparent border-2 border-dashed border-white/30 rounded-xl px-4 py-3 cursor-pointer hover:bg-white/10 transition-colors text-white/90 font-medium text-sm mt-4">
-                                    <Upload size={16} />
-                                    + Import File
-                                    <input type="file" multiple accept=".csv, .jpg, .png, .pdf, .svg" className="hidden" onChange={handleWorkbenchImport} />
-                                </label>
-                            </div>
-
+                            <label className={`flex items-center justify-center bg-transparent border-2 border-dashed border-white/30 rounded-xl cursor-pointer hover:bg-white/10 transition-colors text-white/90 font-medium ${isLeftSidebarCollapsed ? 'w-12 h-12 mt-2 shrink-0' : 'gap-2 px-4 py-3 text-sm mt-4'}`}>
+                                <Upload size={isLeftSidebarCollapsed ? 20 : 16} />
+                                {!isLeftSidebarCollapsed && <span>+ Import File</span>}
+                                <input type="file" multiple accept=".csv, .jpg, .png, .pdf, .svg" className="hidden" onChange={handleWorkbenchImport} />
+                            </label>
                         </div>
                     </div>
 
-                    <div className="mt-auto p-6 space-y-4 border-t border-white/10">
-                        <a href="/settings" className="flex items-center gap-3 text-[#3E2A2F] font-medium text-sm hover:text-white transition-colors">
-                            <Settings size={18} />
-                            Settings
+                    <div className={`mt-auto space-y-4 border-t border-white/10 py-6 ${isLeftSidebarCollapsed ? 'px-2 flex flex-col items-center' : 'px-6'}`}>
+                        <a href="/settings" className={`flex items-center gap-3 text-[#3E2A2F] font-medium text-sm hover:text-white transition-colors ${isLeftSidebarCollapsed ? 'justify-center p-2' : ''}`}>
+                            <Settings size={isLeftSidebarCollapsed ? 20 : 18} />
+                            {!isLeftSidebarCollapsed && 'Settings'}
                         </a>
                         <button
                             onClick={() => setIsExportModalOpen(true)}
-                            className="flex w-full items-center gap-3 text-[#3E2A2F] font-medium text-sm hover:text-white transition-colors text-left"
+                            className={`flex w-full items-center gap-3 text-[#3E2A2F] font-medium text-sm hover:text-white transition-colors ${isLeftSidebarCollapsed ? 'justify-center p-2' : 'text-left'}`}
                         >
-                            <Download size={18} />
-                            Export PDF
+                            <Download size={isLeftSidebarCollapsed ? 20 : 18} />
+                            {!isLeftSidebarCollapsed && 'Export PDF'}
                         </button>
-                        <a href="#" className="flex items-center gap-3 text-[#3E2A2F]/60 font-medium text-sm hover:text-[#3E2A2F]/80 transition-colors">
-                            <Trash2 size={18} />
-                            Trash
+                        <a href="#" className={`flex items-center gap-3 text-[#3E2A2F]/60 font-medium text-sm hover:text-[#3E2A2F]/80 transition-colors ${isLeftSidebarCollapsed ? 'justify-center p-2' : ''}`}>
+                            <Trash2 size={isLeftSidebarCollapsed ? 20 : 18} />
+                            {!isLeftSidebarCollapsed && 'Trash'}
                         </a>
                     </div>
-
                 </div>
 
                 {/* Column 2: Center Editor */}
                 <div
-                    className="flex-1 bg-white my-4 lg:my-6 rounded-3xl shadow-lg border border-gray-100 overflow-y-auto z-0 flex flex-col transition-all duration-200"
+                    className={`flex-1 bg-white my-4 lg:my-6 rounded-3xl shadow-lg border border-gray-100 overflow-y-auto z-0 flex flex-col transition-all duration-300 ease-in-out`}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={handleDrop}
                 >
 
-                    <div className="max-w-[800px] w-full mx-auto px-8 lg:px-12 py-10">
+                    <div className={`w-full mx-auto py-10 transition-all duration-300 ease-in-out ${isFluidMode ? 'max-w-[95%] px-8' : 'max-w-5xl px-12'}`}>
 
                         {/* Top Bar inside Editor */}
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-14">
@@ -800,6 +831,8 @@ export default function MainWorkspace() {
                     user={user}
                     selectionType={selectionType}
                     chartData={chartData}
+                    isCollapsed={isRightSidebarCollapsed}
+                    toggleSidebar={() => setIsRightSidebarCollapsed(!isRightSidebarCollapsed)}
                 />
 
             </div>
@@ -825,6 +858,17 @@ export default function MainWorkspace() {
 
             {/* Table Picker Modal */}
             <TablePickerModal editor={editor} />
+
+            {/* SVG Import Modal */}
+            <SvgImportModal
+                isOpen={isSvgModalOpen}
+                onClose={() => {
+                    setIsSvgModalOpen(false);
+                    setPendingSvg(null);
+                }}
+                svgData={pendingSvg}
+                editor={editor}
+            />
         </div>
     );
 }
