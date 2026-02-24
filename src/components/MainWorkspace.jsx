@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     FlaskConical, ChevronDown, ChevronLeft, ChevronRight, Folder, FileText, BarChart2, Option,
     Settings, Download, Trash2, Cloud, Share, CheckCircle2, Save, Upload,
     Clock, Image as ImageIcon, Bold, Italic, Underline as UnderlineIcon, Strikethrough,
     Heading1, Heading2, List, ListOrdered, Quote,
     Subscript as SubscriptIcon, Superscript as SuperscriptIcon,
-    MessageSquarePlus
+    MessageSquarePlus, Plus
 } from 'lucide-react';
 import ShareModal from './ShareModal';
 import ExportPdfModal from './ExportPdfModal';
@@ -41,6 +41,9 @@ import GraphExtension from './GraphExtension';
 import SvgImportModal from './SvgImportModal';
 import NewProjectModal from './NewProjectModal';
 import ConfirmationModal from './ConfirmationModal';
+import PdfExtension from './PdfExtension.jsx';
+import PdfPreviewModal from './PdfPreviewModal';
+import LinkPdfModal from './LinkPdfModal';
 
 const FontSize = Extension.create({
     name: 'fontSize',
@@ -160,6 +163,99 @@ export default function MainWorkspace() {
     };
 
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [previewPdf, setPreviewPdf] = useState(null); // { src, fileName } or null
+
+    // PDF Reference Library State
+    const [pdfLibrary, setPdfLibrary] = useState([]);
+    const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+
+    const handleUploadPdf = (event) => {
+        const files = Array.from(event.target.files);
+        files.forEach(file => {
+            if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+                setPdfLibrary(prev => [...prev, {
+                    id: Date.now() + Math.random(),
+                    name: file.name,
+                    url: URL.createObjectURL(file)
+                }]);
+            }
+        });
+        event.target.value = ''; // Reset input so the same file can be re-uploaded
+    };
+
+    const handleInsertPdf = (pdfItem) => {
+        editor.chain().focus().insertContent({
+            type: 'pdfSmartChip',
+            attrs: { src: pdfItem.url, fileName: pdfItem.name }
+        }).run();
+        setIsLinkModalOpen(false);
+    };
+
+    // Workbench file import handler — generates Blob URLs for all files
+    const handleWorkbenchImport = (event) => {
+        const importedFiles = Array.from(event.target.files);
+        if (!importedFiles.length || !activeProject?.id) return;
+
+        importedFiles.forEach(file => {
+            const fileUrl = URL.createObjectURL(file);
+            const fileObject = {
+                id: Date.now().toString() + Math.random(),
+                name: file.name,
+                type: file.type || 'application/octet-stream',
+                url: fileUrl,        // CRITICAL: Blob URL for previewing
+                file: file,          // Keep original File reference
+                data: fileUrl,       // Compat with existing drag-start logic
+                date: new Date().toLocaleDateString()
+            };
+            addFileToProject(activeProject.id, fileObject);
+        });
+        event.target.value = ''; // Reset so same file can be re-imported
+    };
+
+    // Unified PDF source: merge Workbench files + Reference Library, deduplicated
+    const allLinkablePdfs = useMemo(() => {
+        // 1. Get Workbench PDFs and ensure URL exists
+        const workbenchPdfs = (activeProject?.files || [])
+            .filter(f => f.name.toLowerCase().endsWith('.pdf'))
+            .map(f => ({
+                ...f,
+                source: 'Workbench',
+                // Safety: if url is missing but we have the file object, create one on the fly
+                url: f.url || (f.file ? URL.createObjectURL(f.file) : null)
+            }))
+            .filter(f => f.url !== null); // Remove any broken entries
+
+        // 2. Get References (already have URLs)
+        const referencePdfs = pdfLibrary.map(f => ({ ...f, source: 'References' }));
+
+        // 3. Merge and deduplicate by name
+        const combined = [...workbenchPdfs, ...referencePdfs];
+        const unique = [];
+        const names = new Set();
+        for (const file of combined) {
+            if (!names.has(file.name)) {
+                names.add(file.name);
+                unique.push(file);
+            }
+        }
+        return unique;
+    }, [activeProject?.files, pdfLibrary]);
+
+    // Listen for custom PDF click events
+    useEffect(() => {
+        const handleOpenPdf = (e) => {
+            setPreviewPdf(e.detail);
+        };
+        window.addEventListener('open-pdf-preview', handleOpenPdf);
+        return () => window.removeEventListener('open-pdf-preview', handleOpenPdf);
+    }, []);
+
+    // Listen for /link slash command event
+    useEffect(() => {
+        const handleOpenLinkModal = () => setIsLinkModalOpen(true);
+        window.addEventListener('open-pdf-link-modal', handleOpenLinkModal);
+        return () => window.removeEventListener('open-pdf-link-modal', handleOpenLinkModal);
+    }, []);
 
     // Editable Title state 
     const [localTitle, setLocalTitle] = useState(activeProject?.name || "Untitled Analysis");
@@ -228,6 +324,7 @@ export default function MainWorkspace() {
     const editor = useEditor({
         extensions: [
             StarterKit,
+            PdfExtension,
             Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
             BulletList,
             ListItem,
@@ -360,32 +457,6 @@ export default function MainWorkspace() {
         };
     }, [editor]);
 
-    const handleWorkbenchImport = (e) => {
-        const files = Array.from(e.target.files);
-        if (!files.length || !activeProject) return;
-
-        files.forEach(file => {
-            const isImage = file.type.startsWith('image/');
-            const reader = new FileReader();
-
-            reader.onload = () => {
-                const fileObject = {
-                    id: Date.now().toString() + Math.random().toString(36).substring(7),
-                    name: file.name,
-                    type: file.type,
-                    data: reader.result
-                };
-                addFileToProject(activeProject.id, fileObject);
-            };
-
-            if (isImage) {
-                reader.readAsDataURL(file);
-            } else {
-                reader.readAsText(file);
-            }
-        });
-    };
-
     const handleDragStart = (e, fileObject) => {
         e.dataTransfer.setData('application/json', JSON.stringify(fileObject));
         e.dataTransfer.effectAllowed = 'copy';
@@ -421,25 +492,69 @@ export default function MainWorkspace() {
         editor.chain().focus().insertContent(tableHTML).run();
     };
 
-    const handleDrop = (e) => {
-        e.preventDefault();
+    // 1. Mandatory DragOver handler to allow dropping
+    const handleDragOver = (e) => {
+        e.preventDefault(); // Crucial: This tells the browser "It's okay to drop here"
+        e.stopPropagation();
+    };
 
-        // Handle OS file drops
+    // 2. The Master Drop Handler (Container Interception pattern)
+    const handleDrop = (e) => {
+        // Only intercept if files are being dropped from the OS
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             const file = e.dataTransfer.files[0];
-            const isImage = file.type.startsWith('image/');
-            const reader = new FileReader();
 
-            reader.onload = () => {
-                if (file.type === 'image/svg+xml') {
-                    // Read as text for XML parsing; build a data URL for preview
+            // Check for PDF specifically
+            if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+                e.preventDefault();  // Stop the browser from opening the PDF in a new tab
+                e.stopPropagation(); // Stop ProseMirror from also seeing this event
+
+                const url = URL.createObjectURL(file);
+
+                // Insert the Smart Chip at the current selection
+                editor.chain().focus().insertContent({
+                    type: 'pdfSmartChip',
+                    attrs: { src: url, fileName: file.name }
+                }).run();
+
+                return; // We handled it, exit.
+            }
+
+            // Check for SVG
+            if (file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg')) {
+                e.preventDefault();
+                e.stopPropagation();
+                const reader = new FileReader();
+                reader.onload = () => {
                     const svgText = reader.result;
                     const dataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgText)));
                     setPendingSvg({ url: dataUrl, name: file.name, rawSvg: svgText });
                     setIsSvgModalOpen(true);
-                } else if (isImage && editor) {
-                    editor.chain().focus().setImage({ src: reader.result }).run();
-                } else if (file.name.endsWith('.csv') || file.type === 'text/csv' || file.name.endsWith('.txt')) {
+                };
+                reader.readAsText(file);
+                return;
+            }
+
+            // Check for images
+            if (file.type.startsWith('image/')) {
+                e.preventDefault();
+                e.stopPropagation();
+                const reader = new FileReader();
+                reader.onload = () => {
+                    if (editor) {
+                        editor.chain().focus().setImage({ src: reader.result }).run();
+                    }
+                };
+                reader.readAsDataURL(file);
+                return;
+            }
+
+            // Check for CSV/TXT
+            if (file.name.endsWith('.csv') || file.type === 'text/csv' || file.name.endsWith('.txt')) {
+                e.preventDefault();
+                e.stopPropagation();
+                const reader = new FileReader();
+                reader.onload = () => {
                     setIsImporting(true);
                     setTimeout(() => {
                         Papa.parse(reader.result, {
@@ -455,24 +570,16 @@ export default function MainWorkspace() {
                                     ...row,
                                     outlier: 'No'
                                 }));
-
                                 injectTableHTML(results.meta.fields, results.data);
                                 setChartData(formattedData);
                                 setIsImporting(false);
                             }
                         });
                     }, 100);
-                }
-            };
-            // SVGs must be read as text for XML parsing
-            if (file.type === 'image/svg+xml') {
+                };
                 reader.readAsText(file);
-            } else if (isImage) {
-                reader.readAsDataURL(file);
-            } else {
-                reader.readAsText(file);
+                return;
             }
-            return;
         }
 
         // Handle internal workbench drop
@@ -637,6 +744,43 @@ export default function MainWorkspace() {
                         </div>
                     </div>
 
+                    {/* 📄 REFERENCES Section */}
+                    {!isLeftSidebarCollapsed && (
+                        <div className="px-6 pb-4">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-[#3E2A2F]/70 text-[10px] font-bold tracking-widest uppercase">📄 References</span>
+                                <label className="cursor-pointer text-white/70 hover:text-white hover:bg-white/10 p-1 rounded-md transition-colors">
+                                    <Plus size={14} />
+                                    <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={handleUploadPdf} multiple />
+                                </label>
+                            </div>
+                            {pdfLibrary.length === 0 ? (
+                                <p className="text-[#3E2A2F]/40 text-xs italic">No PDFs uploaded yet</p>
+                            ) : (
+                                <div className="space-y-1 max-h-32 overflow-y-auto">
+                                    {pdfLibrary.map((pdf) => (
+                                        <div
+                                            key={pdf.id}
+                                            className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors cursor-default"
+                                            title={pdf.name}
+                                        >
+                                            <FileText size={14} className="text-red-300 shrink-0" />
+                                            <span className="text-white/90 text-xs font-medium truncate">{pdf.name}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    {isLeftSidebarCollapsed && (
+                        <div className="px-2 pb-4 flex flex-col items-center">
+                            <label className="cursor-pointer text-white/70 hover:text-white hover:bg-white/10 p-2 rounded-md transition-colors" title="Upload PDF Reference">
+                                <FileText size={18} />
+                                <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={handleUploadPdf} multiple />
+                            </label>
+                        </div>
+                    )}
+
                     <div className={`mt-auto space-y-4 border-t border-white/10 py-6 ${isLeftSidebarCollapsed ? 'px-2 flex flex-col items-center' : 'px-6'}`}>
                         <a href="/settings" className={`flex items-center gap-3 text-[#3E2A2F] font-medium text-sm hover:text-white transition-colors ${isLeftSidebarCollapsed ? 'justify-center p-2' : ''}`}>
                             <Settings size={isLeftSidebarCollapsed ? 20 : 18} />
@@ -662,12 +806,12 @@ export default function MainWorkspace() {
 
                 {/* Column 2: Center Editor */}
                 <div
-                    className={`flex-1 flex flex-col bg-white shadow-sm border-x border-stone-200 h-full overflow-y-auto px-8 lg:px-12 transition-all duration-300 ease-in-out m-0 rounded-none z-0`}
-                    onDragOver={(e) => e.preventDefault()}
+                    className={`flex-1 flex flex-col bg-white shadow-sm border-x border-stone-200 h-full overflow-y-auto m-0 rounded-none z-0 relative`}
+                    onDragOver={handleDragOver}
                     onDrop={handleDrop}
                 >
 
-                    <div className={`w-full py-10 transition-all duration-300 ease-in-out`}>
+                    <div className={`w-full py-10 px-8 lg:px-12 transition-all duration-300 ease-in-out h-full min-h-full`}>
 
                         {/* Top Bar inside Editor */}
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-14">
@@ -747,8 +891,8 @@ export default function MainWorkspace() {
                             {/* Top formatting toolbar was moved to the contextual Properties sidebar */}
 
                             {/* Editor Area */}
-                            <div className="mb-10 min-h-[500px] relative">
-                                <EditorContent editor={editor} />
+                            <div className="mb-10 min-h-[500px] h-full relative cursor-text text-lg" onClick={() => editor?.chain()?.focus()?.run()}>
+                                <EditorContent editor={editor} className="h-full" />
                             </div>
 
                             {isImporting && (
@@ -907,8 +1051,23 @@ export default function MainWorkspace() {
                 editor={editor}
             />
 
+            {/* PDF Preview Modal */}
+            <PdfPreviewModal
+                isOpen={!!previewPdf}
+                onClose={() => setPreviewPdf(null)}
+                pdfData={previewPdf}
+            />
+
             {/* New Project Modal */}
             <NewProjectModal />
+
+            {/* PDF Link Citation Picker Modal */}
+            <LinkPdfModal
+                isOpen={isLinkModalOpen}
+                onClose={() => setIsLinkModalOpen(false)}
+                pdfs={allLinkablePdfs}
+                onSelect={handleInsertPdf}
+            />
 
             <ConfirmationModal
                 isOpen={isDeleteModalOpen}

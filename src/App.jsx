@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AppContextProvider } from './context/AppContext';
 import DashboardLayout from './components/DashboardLayout';
@@ -8,6 +8,21 @@ import MainWorkspace from './components/MainWorkspace';
 import LoginPage from './components/LoginPage';
 
 function App() {
+
+  // Prevent browser from opening dragged files if they miss the editor dropzone
+  useEffect(() => {
+    const handleDragOver = (e) => e.preventDefault();
+    const handleDrop = (e) => e.preventDefault();
+
+    window.addEventListener('dragover', handleDragOver, false);
+    window.addEventListener('drop', handleDrop, false);
+
+    return () => {
+      window.removeEventListener('dragover', handleDragOver, false);
+      window.removeEventListener('drop', handleDrop, false);
+    };
+  }, []);
+
   return (
     <AppContextProvider>
       <Router>

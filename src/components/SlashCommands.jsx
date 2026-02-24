@@ -4,7 +4,7 @@ import { ReactRenderer } from '@tiptap/react';
 import tippy from 'tippy.js';
 import CommandList from './CommandList';
 import React from 'react';
-import { Type, Heading1, Heading2, Heading3, List, Minus, Sigma, Table2 } from 'lucide-react';
+import { Type, Heading1, Heading2, Heading3, List, Minus, Sigma, Table2, FileText } from 'lucide-react';
 
 const suggestionConfig = {
     char: '/',
@@ -83,6 +83,15 @@ const suggestionConfig = {
                 command: ({ editor, range }) => {
                     editor.chain().focus().deleteRange(range).run();
                     window.dispatchEvent(new CustomEvent('open-symbol-picker'));
+                },
+            },
+            {
+                title: 'Link PDF Reference',
+                description: 'Insert a reference to an uploaded PDF.',
+                icon: <FileText size={16} />,
+                command: ({ editor, range }) => {
+                    editor.chain().focus().deleteRange(range).run();
+                    window.dispatchEvent(new Event('open-pdf-link-modal'));
                 },
             },
         ].filter(item => item.title.toLowerCase().startsWith(query.toLowerCase())).slice(0, 10);
