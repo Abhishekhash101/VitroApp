@@ -5,7 +5,7 @@ import {
     Clock, Image as ImageIcon, Bold, Italic, Underline as UnderlineIcon, Strikethrough,
     Heading1, Heading2, List, ListOrdered, Quote,
     Subscript as SubscriptIcon, Superscript as SuperscriptIcon,
-    MessageSquarePlus, Plus
+    MessageSquarePlus
 } from 'lucide-react';
 import ShareModal from './ShareModal';
 import ExportPdfModal from './ExportPdfModal';
@@ -165,23 +165,8 @@ export default function MainWorkspace() {
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [previewPdf, setPreviewPdf] = useState(null); // { src, fileName } or null
 
-    // PDF Reference Library State
-    const [pdfLibrary, setPdfLibrary] = useState([]);
+    // PDF Link Modal state
     const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
-
-    const handleUploadPdf = (event) => {
-        const files = Array.from(event.target.files);
-        files.forEach(file => {
-            if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-                setPdfLibrary(prev => [...prev, {
-                    id: Date.now() + Math.random(),
-                    name: file.name,
-                    url: URL.createObjectURL(file)
-                }]);
-            }
-        });
-        event.target.value = ''; // Reset input so the same file can be re-uploaded
-    };
 
     const handleInsertPdf = (pdfItem) => {
         editor.chain().focus().insertContent({
@@ -212,34 +197,17 @@ export default function MainWorkspace() {
         event.target.value = ''; // Reset so same file can be re-imported
     };
 
-    // Unified PDF source: merge Workbench files + Reference Library, deduplicated
+    // PDF source: get linkable PDFs from the main Project Workbench
     const allLinkablePdfs = useMemo(() => {
-        // 1. Get Workbench PDFs and ensure URL exists
-        const workbenchPdfs = (activeProject?.files || [])
+        return (activeProject?.files || [])
             .filter(f => f.name.toLowerCase().endsWith('.pdf'))
             .map(f => ({
                 ...f,
-                source: 'Workbench',
-                // Safety: if url is missing but we have the file object, create one on the fly
+                source: 'Project Files',
                 url: f.url || (f.file ? URL.createObjectURL(f.file) : null)
             }))
-            .filter(f => f.url !== null); // Remove any broken entries
-
-        // 2. Get References (already have URLs)
-        const referencePdfs = pdfLibrary.map(f => ({ ...f, source: 'References' }));
-
-        // 3. Merge and deduplicate by name
-        const combined = [...workbenchPdfs, ...referencePdfs];
-        const unique = [];
-        const names = new Set();
-        for (const file of combined) {
-            if (!names.has(file.name)) {
-                names.add(file.name);
-                unique.push(file);
-            }
-        }
-        return unique;
-    }, [activeProject?.files, pdfLibrary]);
+            .filter(f => f.url !== null);
+    }, [activeProject?.files]);
 
     // Listen for custom PDF click events
     useEffect(() => {
@@ -744,42 +712,7 @@ export default function MainWorkspace() {
                         </div>
                     </div>
 
-                    {/* 📄 REFERENCES Section */}
-                    {!isLeftSidebarCollapsed && (
-                        <div className="px-6 pb-4">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-[#3E2A2F]/70 text-[10px] font-bold tracking-widest uppercase">📄 References</span>
-                                <label className="cursor-pointer text-white/70 hover:text-white hover:bg-white/10 p-1 rounded-md transition-colors">
-                                    <Plus size={14} />
-                                    <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={handleUploadPdf} multiple />
-                                </label>
-                            </div>
-                            {pdfLibrary.length === 0 ? (
-                                <p className="text-[#3E2A2F]/40 text-xs italic">No PDFs uploaded yet</p>
-                            ) : (
-                                <div className="space-y-1 max-h-32 overflow-y-auto">
-                                    {pdfLibrary.map((pdf) => (
-                                        <div
-                                            key={pdf.id}
-                                            className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors cursor-default"
-                                            title={pdf.name}
-                                        >
-                                            <FileText size={14} className="text-red-300 shrink-0" />
-                                            <span className="text-white/90 text-xs font-medium truncate">{pdf.name}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
-                    {isLeftSidebarCollapsed && (
-                        <div className="px-2 pb-4 flex flex-col items-center">
-                            <label className="cursor-pointer text-white/70 hover:text-white hover:bg-white/10 p-2 rounded-md transition-colors" title="Upload PDF Reference">
-                                <FileText size={18} />
-                                <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={handleUploadPdf} multiple />
-                            </label>
-                        </div>
-                    )}
+
 
                     <div className={`mt-auto space-y-4 border-t border-white/10 py-6 ${isLeftSidebarCollapsed ? 'px-2 flex flex-col items-center' : 'px-6'}`}>
                         <a href="/settings" className={`flex items-center gap-3 text-[#3E2A2F] font-medium text-sm hover:text-white transition-colors ${isLeftSidebarCollapsed ? 'justify-center p-2' : ''}`}>
