@@ -19,6 +19,29 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
     const [localYLabel, setLocalYLabel] = React.useState('');
     const [localLegends, setLocalLegends] = React.useState([]);
     const [tableHeaders, setTableHeaders] = React.useState([]);
+    const [numericColumns, setNumericColumns] = React.useState([]);
+    const [selectedStatColumn, setSelectedStatColumn] = React.useState('');
+    const [columnStats, setColumnStats] = React.useState(null);
+
+    // Math Helper
+    const calculateStats = (numbers) => {
+        if (!numbers || numbers.length === 0) return null;
+        const count = numbers.length;
+        const sum = numbers.reduce((a, b) => a + b, 0);
+        const avg = sum / count;
+        const min = Math.min(...numbers);
+        const max = Math.max(...numbers);
+        const variance = numbers.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / (count > 1 ? count - 1 : 1);
+        const stdDev = Math.sqrt(variance);
+        return {
+            count,
+            sum: sum.toFixed(2),
+            avg: avg.toFixed(2),
+            min: min.toFixed(2),
+            max: max.toFixed(2),
+            stdDev: stdDev.toFixed(2)
+        };
+    };
 
     // Dynamically extract headers from the active table when cursor is inside one
     React.useEffect(() => {
@@ -45,6 +68,47 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
         editor.on('selectionUpdate', updateHeaders);
         return () => editor.off('selectionUpdate', updateHeaders);
     }, [editor]);
+
+    // Live Statistics Extraction
+    React.useEffect(() => {
+        if (!editor || !editor.isActive('table')) {
+            setNumericColumns([]);
+            setColumnStats(null);
+            return;
+        }
+        const { selection } = editor.state;
+        let tableNode = null;
+        for (let i = selection.$from.depth; i > 0; i--) {
+            const node = selection.$from.node(i);
+            if (node.type.name === 'table') { tableNode = node; break; }
+        }
+        if (!tableNode || !tableNode.content.content.length) return;
+        const rows = tableNode.content.content;
+        if (rows.length < 2) return;
+
+        const headers = rows[0].content.content.map(cell => cell.textContent.trim());
+        const colDataMap = {};
+        headers.forEach(h => colDataMap[h] = []);
+
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            row.content.content.forEach((cell, index) => {
+                const header = headers[index] || `col${index}`;
+                const val = parseFloat(cell.textContent.trim());
+                if (!isNaN(val)) colDataMap[header].push(val);
+            });
+        }
+
+        const numCols = headers.filter(h => colDataMap[h] && colDataMap[h].length > 0);
+        setNumericColumns(numCols);
+        const activeCol = selectedStatColumn && numCols.includes(selectedStatColumn) ? selectedStatColumn : numCols[0];
+        setSelectedStatColumn(activeCol);
+        if (activeCol) {
+            setColumnStats(calculateStats(colDataMap[activeCol]));
+        } else {
+            setColumnStats(null);
+        }
+    }, [editor?.state.selection, editor?.state.doc, selectedStatColumn]);
 
     React.useEffect(() => {
         if (chartData && chartData.length > 0) {
@@ -161,6 +225,30 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
                 seriesKeys: [localY || headers[1]], // MUST be an array
                 xLabel: localX || headers[0],
                 yLabel: localY || headers[1]
+            }
+        }).run();
+    };
+
+    const handleInsertStatsBlock = () => {
+        if (!editor || !selectedStatColumn) return;
+        const { selection } = editor.state;
+        let currentTableNode = null;
+        let tableEndPos = null;
+        for (let i = selection.$from.depth; i > 0; i--) {
+            const node = selection.$from.node(i);
+            if (node.type.name === 'table') {
+                currentTableNode = node;
+                tableEndPos = selection.$from.after(i);
+                break;
+            }
+        }
+        if (!currentTableNode || !tableEndPos) return;
+        editor.chain().focus().insertContentAt(tableEndPos, {
+            type: 'smartSummary',
+            attrs: {
+                tableId: currentTableNode.attrs.tableId,
+                tableName: currentTableNode.attrs.tableName || 'Unnamed Table',
+                columnName: selectedStatColumn
             }
         }).run();
     };
@@ -417,6 +505,58 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
                             </button>
                         </div>
 
+                        {/* LIVE DATA INSPECTOR */}
+                        {numericColumns.length > 0 && (
+                            <div className="mt-6 border-t border-stone-200 pt-5">
+                                <h4 className="text-[10px] font-bold text-gray-400 tracking-wider mb-3 uppercase">Live Statistics</h4>
+                                <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-4 shadow-sm">
+                                    <div className="flex flex-col">
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 px-0.5">Analyze Column</label>
+                                        <select
+                                            value={selectedStatColumn}
+                                            onChange={(e) => setSelectedStatColumn(e.target.value)}
+                                            className="bg-gray-50 border border-gray-200 text-gray-800 text-xs rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                                        >
+                                            {numericColumns.map(col => <option key={col} value={col}>{col}</option>)}
+                                        </select>
+                                    </div>
+                                    {columnStats && (
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                                <span className="block text-[9px] text-gray-400 uppercase font-bold">Sum</span>
+                                                <span className="block text-sm font-bold text-[#B7684C]">{columnStats.sum}</span>
+                                            </div>
+                                            <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                                <span className="block text-[9px] text-gray-400 uppercase font-bold">Average</span>
+                                                <span className="block text-sm font-bold text-[#B7684C]">{columnStats.avg}</span>
+                                            </div>
+                                            <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                                <span className="block text-[9px] text-gray-400 uppercase font-bold">Max</span>
+                                                <span className="block text-xs font-medium text-gray-700">{columnStats.max}</span>
+                                            </div>
+                                            <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                                <span className="block text-[9px] text-gray-400 uppercase font-bold">Min</span>
+                                                <span className="block text-xs font-medium text-gray-700">{columnStats.min}</span>
+                                            </div>
+                                            <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                                <span className="block text-[9px] text-gray-400 uppercase font-bold">Std Dev</span>
+                                                <span className="block text-xs font-medium text-gray-700">{columnStats.stdDev}</span>
+                                            </div>
+                                            <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                                <span className="block text-[9px] text-gray-400 uppercase font-bold">Count</span>
+                                                <span className="block text-xs font-medium text-gray-700">{columnStats.count}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    <button
+                                        onClick={handleInsertStatsBlock}
+                                        className="w-full mt-3 py-2 bg-[#8B5F54] hover:bg-[#70483C] text-white font-bold text-xs rounded-lg shadow-sm transition-colors"
+                                    >
+                                        Insert Live Summary Block
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                     </div>
                 )}

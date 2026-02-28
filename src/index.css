@@ -162,7 +162,7 @@
 }
 
 .ProseMirror table[data-table-name]::before {
-  content: "📊 " attr(data-table-name);
+  content: attr(data-table-name);
   display: table-caption;
   caption-side: top;
   text-align: left;

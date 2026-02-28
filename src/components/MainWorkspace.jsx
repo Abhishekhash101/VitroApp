@@ -38,6 +38,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import SymbolPickerModal from './SymbolPickerModal';
 import TablePickerModal from './TablePickerModal';
 import GraphExtension from './GraphExtension';
+import SmartSummaryExtension from '../extensions/SmartSummaryExtension';
 import SvgImportModal from './SvgImportModal';
 import NewProjectModal from './NewProjectModal';
 import ConfirmationModal from './ConfirmationModal';
@@ -412,6 +413,7 @@ export default function MainWorkspace() {
             Subscript,
             Superscript,
             GraphExtension,
+            SmartSummaryExtension,
         ],
         content: '', // Start entirely empty (Phase 3 requirements)
         onUpdate: ({ editor }) => {
