@@ -372,8 +372,8 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
                                     onChange={e => setLocalChartType(e.target.value)}
                                 >
                                     <option value="line">Line Chart</option>
-                                    <option value="scatter">Scatter Plot</option>
-                                    <option value="bar">Bar Chart</option>
+                                    <option value="bar">Clustered Bar</option>
+                                    <option value="stacked-bar">Stacked Bar (Centered)</option>
                                     <option value="area">Area Chart</option>
                                 </select>
                             </div>

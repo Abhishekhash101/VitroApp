@@ -2,14 +2,16 @@ import React from 'react';
 import { NodeViewWrapper } from '@tiptap/react';
 import { ResponsiveContainer, BarChart, LineChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Label } from 'recharts';
 
-const COLORS = ['#8B5F54', '#E07A5F', '#3D405B', '#81B29A', '#F2CC8F']; // Brand color palette
+const COLORS = ['#8B5F54', '#E07A5F', '#3D405B', '#81B29A', '#F2CC8F'];
 
 export default function GraphBlockNode(props) {
     const { data, type, xAxisKey, seriesKeys, xLabel, yLabel } = props.node.attrs;
     if (!data || data.length === 0) return <NodeViewWrapper>Empty Graph</NodeViewWrapper>;
 
-    const ChartComponent = type === 'line' ? LineChart : BarChart;
-    const DataComponent = type === 'line' ? Line : Bar;
+    // Treat 'stacked-bar' as a standard BarChart container
+    const isBar = type === 'bar' || type === 'stacked-bar';
+    const ChartComponent = isBar ? BarChart : LineChart;
+    const DataComponent = isBar ? Bar : Line;
 
     return (
         <NodeViewWrapper className="my-8 p-4 bg-white border border-stone-200 rounded-xl shadow-sm" contentEditable={false}>
@@ -26,7 +28,16 @@ export default function GraphBlockNode(props) {
                         <Tooltip cursor={{ fill: '#F3F4F6' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
                         <Legend verticalAlign="top" height={36} />
                         {seriesKeys.map((key, index) => (
-                            <DataComponent key={key} type="monotone" dataKey={key} fill={COLORS[index % COLORS.length]} stroke={COLORS[index % COLORS.length]} strokeWidth={3} radius={type === 'bar' ? [4, 4, 0, 0] : 0} />
+                            <DataComponent
+                                key={key}
+                                type="monotone"
+                                dataKey={key}
+                                stackId={type === 'stacked-bar' ? "a" : undefined}
+                                fill={COLORS[index % COLORS.length]}
+                                stroke={COLORS[index % COLORS.length]}
+                                strokeWidth={3}
+                                radius={isBar ? [4, 4, 0, 0] : 0}
+                            />
                         ))}
                     </ChartComponent>
                 </ResponsiveContainer>

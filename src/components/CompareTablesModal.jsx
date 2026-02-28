@@ -117,6 +117,7 @@ const CompareTablesModal = ({ isOpen, onClose, editor, onCompare }) => {
                             <label className="block text-xs font-bold text-stone-500 mb-1">CHART TYPE</label>
                             <select value={chartType} onChange={e => setChartType(e.target.value)} className="w-full px-3 py-2 border border-stone-300 rounded-md bg-white">
                                 <option value="bar">Clustered Bar</option>
+                                <option value="stacked-bar">Stacked Bar (Centered)</option>
                                 <option value="line">Line Chart</option>
                             </select>
                         </div>
