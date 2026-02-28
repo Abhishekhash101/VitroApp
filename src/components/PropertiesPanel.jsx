@@ -18,6 +18,33 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
     const [localXLabel, setLocalXLabel] = React.useState('');
     const [localYLabel, setLocalYLabel] = React.useState('');
     const [localLegends, setLocalLegends] = React.useState([]);
+    const [tableHeaders, setTableHeaders] = React.useState([]);
+
+    // Dynamically extract headers from the active table when cursor is inside one
+    React.useEffect(() => {
+        if (!editor) return;
+        const updateHeaders = () => {
+            const { selection } = editor.state;
+            for (let i = selection.$from.depth; i > 0; i--) {
+                const node = selection.$from.node(i);
+                if (node.type.name === 'table') {
+                    const rows = node.content.content;
+                    if (rows && rows.length > 0) {
+                        const headers = rows[0].content.content
+                            .map(cell => cell.textContent.trim())
+                            .filter(h => h !== '');
+                        setTableHeaders(headers);
+                        if (!localX && headers.length > 0) setLocalX(headers[0]);
+                        if (!localY && headers.length > 1) setLocalY(headers[1]);
+                    }
+                    return;
+                }
+            }
+        };
+        updateHeaders();
+        editor.on('selectionUpdate', updateHeaders);
+        return () => editor.off('selectionUpdate', updateHeaders);
+    }, [editor]);
 
     React.useEffect(() => {
         if (chartData && chartData.length > 0) {
@@ -64,38 +91,76 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
     const handleInsertGraph = () => {
         if (!editor) return;
 
+        // If editing an existing graph, update its attributes in-place
         if (selectionType === 'graph') {
-            editor.chain().focus().updateAttributes('graphBlock', { chartType: localChartType, xAxisKey: localX, yAxisKey: localY, rowLimit: localRows, xAxisLabel: localXLabel, yAxisLabel: localYLabel, legends: localLegends }).run();
+            editor.chain().focus().updateAttributes('graphBlock', {
+                type: localChartType,
+                xAxisKey: localX,
+                seriesKeys: [localY],
+                xLabel: localX,
+                yLabel: localY
+            }).run();
             return;
         }
 
-        let insertPos = editor.state.selection.to; // Default to current cursor position
+        // 1. Find the currently active table node using TipTap's resolved position
+        const { selection } = editor.state;
+        let tableNode = null;
+        let tablePos = null;
 
-        // If the user's cursor is currently inside a table, we must escape it
-        if (editor.isActive('table')) {
-            const { $from } = editor.state.selection;
-            // Walk up the document tree to find the boundaries of the parent table
-            for (let d = $from.depth; d > 0; d--) {
-                const node = $from.node(d);
-                if (node.type.name === 'table') {
-                    // Set the insertion point to immediately AFTER the table node
-                    insertPos = $from.after(d);
-                    break;
-                }
+        for (let i = selection.$from.depth; i > 0; i--) {
+            const node = selection.$from.node(i);
+            if (node.type.name === 'table') {
+                tableNode = node;
+                tablePos = selection.$from.after(i);
+                break;
             }
         }
 
-        // Insert the graph exactly at the calculated safe position
-        editor.chain().focus().insertContentAt(insertPos, {
+        if (!tableNode) {
+            return alert("Please place your cursor inside a table to generate a graph.");
+        }
+
+        // 2. Extract Data directly from the TipTap JSON Model
+        const rows = tableNode.content.content;
+        if (!rows || rows.length < 2) {
+            return alert("Table needs at least one header row and one data row.");
+        }
+
+        // Extract Headers (Row 0)
+        const headers = rows[0].content.content.map(cell => cell.textContent.trim());
+        const extractedData = [];
+
+        // Extract Values (Row 1+)
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            const rowData = {};
+            let hasData = false;
+
+            row.content.content.forEach((cell, index) => {
+                const header = headers[index] || `col${index}`;
+                const val = cell.textContent.trim();
+                rowData[header] = (val !== '' && !isNaN(parseFloat(val))) ? parseFloat(val) : val;
+                if (val !== '') hasData = true;
+            });
+
+            if (hasData) extractedData.push(rowData);
+        }
+
+        if (extractedData.length === 0) {
+            return alert("No valid data found in the table.");
+        }
+
+        // 3. Insert the Graph Block with correct attributes
+        editor.chain().focus().insertContentAt(tablePos, {
             type: 'graphBlock',
             attrs: {
-                chartType: localChartType,
-                xAxisKey: localX,
-                yAxisKey: localY,
-                rowLimit: localRows,
-                xAxisLabel: localXLabel,
-                yAxisLabel: localYLabel,
-                legends: localLegends
+                data: extractedData,
+                type: localChartType || 'line',
+                xAxisKey: localX || headers[0],
+                seriesKeys: [localY || headers[1]], // MUST be an array
+                xLabel: localX || headers[0],
+                yLabel: localY || headers[1]
             }
         }).run();
     };
@@ -319,7 +384,8 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
                                     value={localX}
                                     onChange={e => setLocalX(e.target.value)}
                                 >
-                                    {chartData && chartData.length > 0 ? Object.keys(chartData[0]).map(col => <option key={col} value={col}>{col}</option>) : <option value="">No data</option>}
+                                    {(tableHeaders.length > 0 ? tableHeaders : (chartData && chartData.length > 0 ? Object.keys(chartData[0]) : [])).map(col => <option key={col} value={col}>{col}</option>)}
+                                    {tableHeaders.length === 0 && (!chartData || chartData.length === 0) && <option value="">No data</option>}
                                 </select>
                             </div>
                             <div className="flex flex-col">
@@ -329,7 +395,8 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
                                     value={localY}
                                     onChange={e => setLocalY(e.target.value)}
                                 >
-                                    {chartData && chartData.length > 0 ? Object.keys(chartData[0]).map(col => <option key={col} value={col}>{col}</option>) : <option value="">No data</option>}
+                                    {(tableHeaders.length > 0 ? tableHeaders : (chartData && chartData.length > 0 ? Object.keys(chartData[0]) : [])).map(col => <option key={col} value={col}>{col}</option>)}
+                                    {tableHeaders.length === 0 && (!chartData || chartData.length === 0) && <option value="">No data</option>}
                                 </select>
                             </div>
                             <div className="flex flex-col">
@@ -350,76 +417,7 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
                             </button>
                         </div>
 
-                        {/* ── ANALYSIS DATA INSPECTOR (only for selected graphs) ── */}
-                        {selectionType === 'graph' && (
-                            <div className="mt-4">
-                                <h4 className="text-[10px] font-bold text-gray-400 tracking-wider mb-3 uppercase">📊 Analysis Data</h4>
-                                <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-4 shadow-sm">
 
-                                    {/* X-Axis Label */}
-                                    <div className="flex flex-col">
-                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 px-0.5">X-Axis Label</label>
-                                        <input
-                                            type="text"
-                                            className="bg-gray-50 border border-gray-200 text-gray-800 text-xs rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-[#B7684C]/50"
-                                            value={localXLabel}
-                                            onChange={e => {
-                                                setLocalXLabel(e.target.value);
-                                                editor?.chain().focus().updateAttributes('graphBlock', { xAxisLabel: e.target.value }).run();
-                                            }}
-                                            placeholder="e.g. Wavelength (nm)"
-                                        />
-                                    </div>
-
-                                    {/* Y-Axis Label */}
-                                    <div className="flex flex-col">
-                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 px-0.5">Y-Axis Label</label>
-                                        <input
-                                            type="text"
-                                            className="bg-gray-50 border border-gray-200 text-gray-800 text-xs rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-[#B7684C]/50"
-                                            value={localYLabel}
-                                            onChange={e => {
-                                                setLocalYLabel(e.target.value);
-                                                editor?.chain().focus().updateAttributes('graphBlock', { yAxisLabel: e.target.value }).run();
-                                            }}
-                                            placeholder="e.g. Intensity (arb. units)"
-                                        />
-                                    </div>
-
-                                    {/* Legend Names */}
-                                    {localLegends.length > 0 && (
-                                        <div className="flex flex-col">
-                                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 px-0.5">Legend Names</label>
-                                            <div className="space-y-2">
-                                                {localLegends.map((legend, i) => (
-                                                    <input
-                                                        key={i}
-                                                        type="text"
-                                                        className="w-full bg-gray-50 border border-gray-200 text-gray-800 text-xs rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-[#B7684C]/50"
-                                                        value={legend}
-                                                        onChange={e => {
-                                                            const updated = [...localLegends];
-                                                            updated[i] = e.target.value;
-                                                            setLocalLegends(updated);
-                                                            editor?.chain().focus().updateAttributes('graphBlock', { legends: updated }).run();
-                                                        }}
-                                                        placeholder={`Legend ${i + 1}`}
-                                                    />
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Open Data Table */}
-                                    <button
-                                        onClick={() => alert('Opening Data View...')}
-                                        className="w-full py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold text-xs rounded-lg border border-gray-200 transition-colors"
-                                    >
-                                        Open Data Table
-                                    </button>
-                                </div>
-                            </div>
-                        )}
                     </div>
                 )}
 

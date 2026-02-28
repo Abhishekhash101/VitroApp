@@ -4,7 +4,7 @@ import { ReactRenderer } from '@tiptap/react';
 import tippy from 'tippy.js';
 import CommandList from './CommandList';
 import React from 'react';
-import { Type, Heading1, Heading2, Heading3, List, Minus, Sigma, Table2, FileText } from 'lucide-react';
+import { Type, Heading1, Heading2, Heading3, List, Minus, Sigma, Table2, FileText, BarChart2 } from 'lucide-react';
 
 const suggestionConfig = {
     char: '/',
@@ -73,7 +73,16 @@ const suggestionConfig = {
                 icon: <Table2 size={16} />,
                 command: ({ editor, range }) => {
                     editor.chain().focus().deleteRange(range).run();
-                    window.dispatchEvent(new CustomEvent('open-table-picker'));
+                    window.dispatchEvent(new Event('open-table-modal'));
+                },
+            },
+            {
+                title: 'Compare Data',
+                description: 'Compare multiple tables in a chart.',
+                icon: <BarChart2 size={16} />,
+                command: ({ editor, range }) => {
+                    editor.chain().focus().deleteRange(range).run();
+                    window.dispatchEvent(new Event('open-compare-modal'));
                 },
             },
             {

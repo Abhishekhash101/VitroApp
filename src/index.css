@@ -9,10 +9,6 @@
 }
 
 .custom-scroll-table {
-  display: block;
-  overflow-x: auto;
-  max-height: 400px;
-  overflow-y: auto;
   width: 100%;
 }
 
@@ -156,4 +152,24 @@
 .ProseMirror li {
   margin-top: 0 !important;
   margin-bottom: 0 !important;
+}
+
+/* Force the table wrapper to allow positioning */
+.ProseMirror .tableWrapper {
+  position: relative !important;
+  margin-top: 3.5rem !important;
+  margin-bottom: 2rem !important;
+}
+
+.ProseMirror table[data-table-name]::before {
+  content: "📊 " attr(data-table-name);
+  display: table-caption;
+  caption-side: top;
+  text-align: left;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  color: #8B5F54;
+  margin-bottom: 0.75rem;
+  pointer-events: none;
 }

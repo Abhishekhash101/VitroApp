@@ -28,7 +28,7 @@ import { FontFamily } from '@tiptap/extension-font-family';
 import { Subscript } from '@tiptap/extension-subscript';
 import { Superscript } from '@tiptap/extension-superscript';
 import CharacterCount from '@tiptap/extension-character-count';
-import { Table } from '@tiptap/extension-table';
+import { CustomTable } from '../extensions/CustomTable';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { TableCell } from '@tiptap/extension-table-cell';
@@ -44,6 +44,8 @@ import ConfirmationModal from './ConfirmationModal';
 import PdfExtension from './PdfExtension.jsx';
 import PdfPreviewModal from './PdfPreviewModal';
 import LinkPdfModal from './LinkPdfModal';
+import CreateTableModal from './CreateTableModal';
+import CompareTablesModal from './CompareTablesModal';
 
 const FontSize = Extension.create({
     name: 'fontSize',
@@ -110,8 +112,11 @@ export default function MainWorkspace() {
         deleteProject,
         createNewProject,
         setIsNewProjectModalOpen,
-        updateProjectContent
+        updateProjectContent,
+        updateFileInProject
     } = useAppContext();
+
+    const [activeFileId, setActiveFileId] = useState(null);
 
     // Dynamic CSV States (Phase 5)
     const [tableHeaders, setTableHeaders] = useState([]);
@@ -144,6 +149,25 @@ export default function MainWorkspace() {
     // Calculate Fluid Mode
     const isFluidMode = isLeftSidebarCollapsed || isRightSidebarCollapsed;
 
+    // Smart Table Modal
+    const [isTableModalOpen, setIsTableModalOpen] = useState(false);
+
+    // Compare Tables Modal
+    const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
+
+    useEffect(() => {
+        const handleOpenTableModal = () => setIsTableModalOpen(true);
+        const handleOpenCompareModal = () => setIsCompareModalOpen(true);
+
+        window.addEventListener('open-table-modal', handleOpenTableModal);
+        window.addEventListener('open-compare-modal', handleOpenCompareModal);
+
+        return () => {
+            window.removeEventListener('open-table-modal', handleOpenTableModal);
+            window.removeEventListener('open-compare-modal', handleOpenCompareModal);
+        };
+    }, []);
+
     useEffect(() => {
         const handleOpen = () => setIsSymbolPickerOpen(true);
         window.addEventListener('open-symbol-picker', handleOpen);
@@ -152,6 +176,8 @@ export default function MainWorkspace() {
 
     // Find the current project meta
     const activeProject = projects.find(p => p.id === (projectId || ''));
+    const activeFile = activeFileId ? activeProject?.files?.find(f => f.id === activeFileId) : null;
+
 
     const handleDeleteProject = () => {
         if (!activeProject?.id) return;
@@ -174,6 +200,60 @@ export default function MainWorkspace() {
             attrs: { src: pdfItem.url, fileName: pdfItem.name }
         }).run();
         setIsLinkModalOpen(false);
+    };
+
+    const handleInsertSmartTable = ({ name, rows, cols }) => {
+        const tableId = `tbl_${Date.now()}`;
+
+        const tableContent = [];
+        for (let r = 0; r < rows; r++) {
+            const rowContent = [];
+            for (let c = 0; c < cols; c++) {
+                rowContent.push({
+                    type: r === 0 ? 'tableHeader' : 'tableCell',
+                    content: [{ type: 'paragraph' }]
+                });
+            }
+            tableContent.push({
+                type: 'tableRow',
+                content: rowContent
+            });
+        }
+
+        editor.chain()
+            .focus()
+            .insertContent({
+                type: 'table',
+                attrs: { tableId, tableName: name },
+                content: tableContent
+            })
+            .run();
+
+        // Force-sync data attributes to DOM after insertion
+        // (TipTap's Table NodeView bypasses renderHTML)
+        setTimeout(() => {
+            const domTables = editor.view.dom.querySelectorAll('table');
+            let idx = 0;
+            editor.state.doc.descendants((node) => {
+                if (node.type.name === 'table') {
+                    const domTable = domTables[idx];
+                    if (domTable) {
+                        if (node.attrs.tableName) domTable.setAttribute('data-table-name', node.attrs.tableName);
+                        if (node.attrs.tableId) domTable.setAttribute('data-table-id', node.attrs.tableId);
+                    }
+                    idx++;
+                }
+            });
+        }, 50);
+
+        setIsTableModalOpen(false); // Ensure modal closes
+    };
+
+    const handleInsertComparisonGraph = ({ data, type, seriesKeys, xLabel, yLabel }) => {
+        editor.chain().focus().insertContent({
+            type: 'graphBlock',
+            attrs: { data, type, xAxisKey: 'name', seriesKeys, xLabel, yLabel }
+        }).run();
     };
 
     // Workbench file import handler — generates Blob URLs for all files
@@ -226,13 +306,11 @@ export default function MainWorkspace() {
     }, []);
 
     // Editable Title state 
-    const [localTitle, setLocalTitle] = useState(activeProject?.name || "Untitled Analysis");
+    const [localTitle, setLocalTitle] = useState(activeFile ? activeFile.name : (activeProject?.name || "Untitled Analysis"));
 
     useEffect(() => {
-        if (activeProject?.name) {
-            setLocalTitle(activeProject.name);
-        }
-    }, [activeProject?.name]);
+        setLocalTitle(activeFile ? activeFile.name : (activeProject?.name || "Untitled Analysis"));
+    }, [activeFile?.name, activeProject?.name, activeFileId]);
 
     const handleTableChange = (index, field, value) => {
         const newData = [...chartData];
@@ -288,17 +366,25 @@ export default function MainWorkspace() {
         setReplyText("");
     };
 
+    const activeProjectRef = React.useRef(activeProject);
+    const activeFileIdRef = React.useRef(activeFileId);
+    useEffect(() => { activeProjectRef.current = activeProject; }, [activeProject]);
+    useEffect(() => { activeFileIdRef.current = activeFileId; }, [activeFileId]);
+
     // TipTap Editor Configuration with Custom Extensions
     const editor = useEditor({
         extensions: [
-            StarterKit,
+            StarterKit.configure({
+                heading: { levels: [1, 2, 3, 4, 5, 6] },
+                dropcursor: { color: '#1A73E8', width: 4 },
+                bulletList: true,
+                listItem: true,
+                blockquote: true,
+                horizontalRule: true
+            }),
             PdfExtension,
-            Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
-            BulletList,
-            ListItem,
-            Blockquote,
             CharacterCount,
-            Table.configure({
+            CustomTable.configure({
                 resizable: true,
                 HTMLAttributes: {
                     class: 'custom-scroll-table',
@@ -314,14 +400,9 @@ export default function MainWorkspace() {
                     style: 'display: inline-block; max-width: 100%; height: auto; transition: width 0.2s ease;',
                 },
             }),
-            Dropcursor.configure({
-                color: '#1A73E8',
-                width: 4,
-            }),
             TextAlign.configure({
                 types: ['heading', 'paragraph', 'image'],
             }),
-            HorizontalRule,
             Underline,
             SlashCommands,
             TextStyle,
@@ -378,9 +459,34 @@ export default function MainWorkspace() {
                 setChartData(documentChartData);
             }
 
+            // Sync table attrs from TipTap model to DOM
+            // (TipTap's Table uses NodeView which bypasses renderHTML)
+            const domTables = editor.view.dom.querySelectorAll('table');
+            let tableIndex = 0;
+            editor.state.doc.descendants((node) => {
+                if (node.type.name === 'table') {
+                    const domTable = domTables[tableIndex];
+                    if (domTable) {
+                        if (node.attrs.tableName) {
+                            domTable.setAttribute('data-table-name', node.attrs.tableName);
+                        }
+                        if (node.attrs.tableId) {
+                            domTable.setAttribute('data-table-id', node.attrs.tableId);
+                        }
+                    }
+                    tableIndex++;
+                }
+            });
+
             // Sync with Global Persistence
-            if (activeProject?.id) {
-                updateProjectContent(activeProject.id, editor.getHTML());
+            const currProj = activeProjectRef.current;
+            const currFileId = activeFileIdRef.current;
+            if (currProj?.id) {
+                if (currFileId) {
+                    updateFileInProject(currProj.id, currFileId, { content: editor.getHTML() });
+                } else {
+                    updateProjectContent(currProj.id, editor.getHTML());
+                }
             }
         },
         editorProps: {
@@ -391,16 +497,35 @@ export default function MainWorkspace() {
         },
     });
 
+    const handleSwitchFile = React.useCallback((targetFileId) => {
+        if (targetFileId === activeFileId) return;
+
+        if (editor && activeProject?.id) {
+            const currentHtml = editor.getHTML();
+            if (activeFileId) {
+                updateFileInProject(activeProject.id, activeFileId, { content: currentHtml });
+            } else {
+                updateProjectContent(activeProject.id, currentHtml);
+            }
+        }
+
+        setActiveFileId(targetFileId);
+    }, [activeFileId, activeProject?.id, editor, updateFileInProject, updateProjectContent]);
+
     // Sync Editor Content when Project Changes
     useEffect(() => {
         if (!editor || !activeProject) return;
-        // Only update if the editor content is different from the project content
+
+        const targetContent = activeFileId ? (activeProject.files?.find(f => f.id === activeFileId)?.content || "") : (activeProject.content || "");
+
+        // Only update if the editor content is different from the target content
         // (This prevents cursor jumping loops)
         const currentContent = editor.getHTML();
-        if (currentContent !== activeProject.content) {
-            editor.commands.setContent(activeProject.content || "");
+        if (currentContent !== targetContent) {
+            editor.commands.setContent(targetContent, false);
+            editor.commands.focus('end');
         }
-    }, [activeProject?.id, editor]); // Dependency on ID is crucial!
+    }, [activeProject?.id, activeFileId, editor, activeProject?.files]); // Dependency on ID is crucial!
 
     useEffect(() => {
         if (!editor) return;
@@ -687,7 +812,10 @@ export default function MainWorkspace() {
                         </div>
 
                         <div className={`${isLeftSidebarCollapsed ? 'space-y-4 pt-4 flex flex-col items-center w-full' : 'pl-4 space-y-3'}`}>
-                            <div className={`flex items-center bg-white/95 rounded-xl shadow-sm cursor-pointer hover:bg-white transition-colors ${isLeftSidebarCollapsed ? 'justify-center w-12 h-12 shrink-0' : 'gap-3 px-4 py-3 border-l-4 border-[#B7684C]'}`}>
+                            <div
+                                onClick={() => handleSwitchFile(null)}
+                                className={`flex items-center bg-white/95 rounded-xl shadow-sm cursor-pointer hover:bg-white transition-colors border-l-4 ${!activeFileId ? 'border-[#B7684C]' : 'border-transparent'} ${isLeftSidebarCollapsed ? 'justify-center w-12 h-12 shrink-0' : 'gap-3 px-4 py-3'}`}
+                            >
                                 <FileText size={isLeftSidebarCollapsed ? 20 : 18} className="text-[#B7684C] shrink-0" />
                                 {!isLeftSidebarCollapsed && <span className="text-[#3E2A2F] font-bold text-sm truncate">{activeProject?.name || 'Untitled'}.docx</span>}
                             </div>
@@ -697,9 +825,10 @@ export default function MainWorkspace() {
                                     key={f.id}
                                     draggable="true"
                                     onDragStart={(e) => handleDragStart(e, f)}
-                                    className={`flex items-center bg-white/95 rounded-xl shadow-sm cursor-grab hover:bg-white transition-colors border border-transparent hover:border-blue-200/50 ${isLeftSidebarCollapsed ? 'justify-center w-12 h-12 shrink-0' : 'gap-3 px-4 py-3'}`}
+                                    onClick={() => handleSwitchFile(f.id)}
+                                    className={`flex items-center bg-white/95 rounded-xl shadow-sm cursor-grab hover:bg-white transition-colors border-l-4 ${activeFileId === f.id ? 'border-[#B7684C]' : 'border-transparent'} hover:border-blue-200/50 ${isLeftSidebarCollapsed ? 'justify-center w-12 h-12 shrink-0' : 'gap-3 px-4 py-3'}`}
                                 >
-                                    {f.type.startsWith('image/') ? <ImageIcon size={isLeftSidebarCollapsed ? 20 : 18} className="text-blue-400 shrink-0" /> : <BarChart2 size={isLeftSidebarCollapsed ? 20 : 18} className="text-emerald-500 shrink-0" />}
+                                    {f.type.startsWith('image/') ? <ImageIcon size={isLeftSidebarCollapsed ? 20 : 18} className="text-blue-400 shrink-0" /> : f.type === 'page' ? <FileText size={isLeftSidebarCollapsed ? 20 : 18} className="text-stone-500 shrink-0" /> : <BarChart2 size={isLeftSidebarCollapsed ? 20 : 18} className="text-emerald-500 shrink-0" />}
                                     {!isLeftSidebarCollapsed && <span className="text-[#3E2A2F] font-medium text-sm truncate" title={f.name}>{f.name}</span>}
                                 </div>
                             ))}
@@ -751,7 +880,15 @@ export default function MainWorkspace() {
                             <div className="text-[10px] font-bold text-gray-400 tracking-[0.15em] flex items-center gap-2">
                                 <button onClick={() => navigate('/dashboard')} className="hover:text-gray-800 transition-colors">MY PROJECTS</button>
                                 <span>/</span>
-                                <span className="text-[#3E2A2F] font-extrabold uppercase truncate max-w-[200px]">{(activeProject?.name || 'Untitled Document').toUpperCase()}</span>
+                                <button onClick={() => handleSwitchFile(null)} className={`font-extrabold uppercase truncate max-w-[200px] hover:text-[#3E2A2F] transition-colors ${!activeFileId ? 'text-[#3E2A2F]' : ''}`}>
+                                    {(activeProject?.name || 'Untitled Document').toUpperCase()}
+                                </button>
+                                {activeFileId && (
+                                    <>
+                                        <span>/</span>
+                                        <span className="text-[#3E2A2F] font-extrabold uppercase truncate max-w-[200px]">{activeFile?.name?.toUpperCase() || 'UNTITLED PAGE'}</span>
+                                    </>
+                                )}
                             </div>
 
                             <div className="flex items-center gap-5">
@@ -808,9 +945,15 @@ export default function MainWorkspace() {
                                 className="text-4xl lg:text-[44px] font-serif text-[#111111] font-bold leading-tight mb-4 tracking-tight bg-transparent border-none outline-none ring-0 w-full placeholder-gray-300 focus:ring-0 p-0 m-0"
                                 value={localTitle}
                                 onChange={(e) => setLocalTitle(e.target.value)}
-                                onBlur={() => updateProjectTitle(activeProject?.id, localTitle || "Untitled Analysis")}
+                                onBlur={() => {
+                                    if (activeFileId) {
+                                        updateFileInProject(activeProject.id, activeFileId, { name: localTitle || "Untitled Page" });
+                                    } else {
+                                        updateProjectTitle(activeProject?.id, localTitle || "Untitled Analysis");
+                                    }
+                                }}
                                 onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
-                                placeholder="Untitled Analysis"
+                                placeholder={activeFileId ? "Untitled Page" : "Untitled Analysis"}
                             />
                             <div className="flex items-center gap-2 mb-8">
                                 <div className="inline-block bg-[#62414A] text-white text-[10px] font-extrabold tracking-widest px-3 py-1.5 rounded uppercase">
@@ -825,7 +968,7 @@ export default function MainWorkspace() {
 
                             {/* Editor Area */}
                             <div className="mb-10 min-h-[500px] h-full relative cursor-text text-lg" onClick={() => editor?.chain()?.focus()?.run()}>
-                                <EditorContent editor={editor} className="h-full" />
+                                <EditorContent editor={editor} key={activeFileId || 'main'} className="h-full" />
                             </div>
 
                             {isImporting && (
@@ -993,6 +1136,21 @@ export default function MainWorkspace() {
 
             {/* New Project Modal */}
             <NewProjectModal />
+
+            {/* Smart Table Modal */}
+            <CreateTableModal
+                isOpen={isTableModalOpen}
+                onClose={() => setIsTableModalOpen(false)}
+                onSubmit={handleInsertSmartTable}
+            />
+
+            {/* Compare Tables Modal */}
+            <CompareTablesModal
+                isOpen={isCompareModalOpen}
+                onClose={() => setIsCompareModalOpen(false)}
+                editor={editor}
+                onCompare={handleInsertComparisonGraph}
+            />
 
             {/* PDF Link Citation Picker Modal */}
             <LinkPdfModal

@@ -8,13 +8,12 @@ export default Node.create({
     atom: true,
     addAttributes() {
         return {
-            chartType: { default: 'line' },
-            xAxisKey: { default: '' },
-            yAxisKey: { default: '' },
-            rowLimit: { default: 100 },
-            xAxisLabel: { default: '' },
-            yAxisLabel: { default: '' },
-            legends: { default: [] },
+            data: { default: [] },
+            type: { default: 'bar' }, // 'line', 'bar', etc.
+            xAxisKey: { default: 'name' },
+            seriesKeys: { default: ['value'] }, // Array of keys to plot (for multi-table)
+            xLabel: { default: '' }, // New
+            yLabel: { default: '' }, // New
         };
     },
     parseHTML() {

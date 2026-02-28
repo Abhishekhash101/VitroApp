@@ -50,6 +50,18 @@ export function AppContextProvider({ children }) {
         }));
     };
 
+    const updateFileInProject = (projectId, fileId, updates) => {
+        setProjects(prev => prev.map(p => {
+            if (p.id === projectId) {
+                return {
+                    ...p,
+                    files: p.files.map(f => f.id === fileId ? { ...f, ...updates } : f)
+                };
+            }
+            return p;
+        }));
+    };
+
     const updateProjectTitle = (projectId, newTitle) => {
         console.log("updateProjectTitle called with:", projectId, newTitle);
         setProjects(prev => {
@@ -102,6 +114,7 @@ export function AppContextProvider({ children }) {
         activeRightPanel, setActiveRightPanel,
         updateProjectTitle,
         updateProjectContent,
+        updateFileInProject,
         chartData,
         setChartData
     };
