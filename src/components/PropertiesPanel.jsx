@@ -94,6 +94,7 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
             const row = rows[i];
             row.content.content.forEach((cell, index) => {
                 const header = headers[index] || `col${index}`;
+                if (!colDataMap[header]) colDataMap[header] = [];
                 const val = parseFloat(cell.textContent.trim());
                 if (!isNaN(val)) colDataMap[header].push(val);
             });
