@@ -1,16 +1,63 @@
-# React + Vite
+# VitroApp
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+VitroApp is a modern web application built with React, Vite, and Tailwind CSS. It features a rich text editor powered by Tiptap, data visualization with Recharts, and seamless client-side routing.
 
-Currently, two official plugins are available:
+## 🏗️ Architecture & Technologies
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Framework**: [React 19](https://react.dev/)
+- **Build Tool**: [Vite](https://vitejs.dev/) - Lightning-fast development server and optimized production builds.
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS framework for rapid UI development.
+- **Routing**: [React Router](https://reactrouter.com/) - Declarative routing for React applications.
+- **Rich Text Editor**: [Tiptap](https://tiptap.dev/) - A headless, framework-agnostic rich text editor.
+- **Charts**: [Recharts](https://recharts.org/) - A composable charting library built on React components.
+- **Icons**: [Lucide React](https://lucide.dev/) - Beautiful and consistent icon toolkit.
 
-## React Compiler
+## 🚀 Getting Started
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Follow these instructions to set up the project locally and run it on your machine.
 
-## Expanding the ESLint configuration
+### Prerequisites
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Make sure you have [Node.js](https://nodejs.org/) (which includes `npm`) installed on your machine.
+
+### Installation
+
+1. Clone the repository (if you haven't already):
+   ```bash
+   git clone https://github.com/Abhishekhash101/VitroApp.git
+   cd VitroApp
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+### Running the Application
+
+To start the development server, run:
+```bash
+npm run dev
+```
+
+The application will be accessible at `http://localhost:5173` (or the URL provided in your terminal). Open that link in your browser to view the app.
+
+### Building for Production
+
+To create an optimized production build, run:
+```bash
+npm run build
+```
+This will output the compiled files into the `dist` folder.
+
+You can preview the production build locally with:
+```bash
+npm run preview
+```
+
+## 📝 Available Scripts
+
+- `npm run dev`: Starts the Vite development server.
+- `npm run build`: Builds the app for production.
+- `npm run lint`: Lints the codebase using ESLint to find issues.
+- `npm run preview`: Starts a local web server to preview the production build.
