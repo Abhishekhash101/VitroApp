@@ -1,6 +1,7 @@
 import React from 'react';
 import { FileText, FileSpreadsheet, FileIcon, Folder, Code, Filter, List, Trash2, Import } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import Avatar from './Avatar';
 
 const getIcon = (type) => {
     switch (type) {
@@ -81,9 +82,7 @@ export default function FilesTable({ selectedProject, setSelectedProject }) {
                                     {file.owner === 'Me' ? (
                                         <div className="h-6 w-6 rounded-full bg-[#C06C4E] flex items-center justify-center text-[10px] font-bold text-white shrink-0">ME</div>
                                     ) : (
-                                        <div className="h-6 w-6 rounded-full bg-orange-200 overflow-hidden shrink-0">
-                                            <img src={`https://ui-avatars.com/api/?name=${file.owner.replace(' ', '+')}&background=random&color=fff`} alt={file.owner} className="h-full w-full object-cover" />
-                                        </div>
+                                        <Avatar name={file.owner} size={24} />
                                     )}
                                     <span className="text-white/80 text-xs">{file.owner}</span>
                                 </div>

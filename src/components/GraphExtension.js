@@ -14,6 +14,7 @@ export default Node.create({
             seriesKeys: { default: ['value'] }, // Array of keys to plot (for multi-table)
             xLabel: { default: '' }, // New
             yLabel: { default: '' }, // New
+            tableId: { default: null }, // Links this graph to its source table (bidirectional flow)
         };
     },
     parseHTML() {

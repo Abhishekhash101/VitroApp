@@ -4,7 +4,7 @@ import { ReactRenderer } from '@tiptap/react';
 import tippy from 'tippy.js';
 import CommandList from './CommandList';
 import React from 'react';
-import { Type, Heading1, Heading2, Heading3, List, Minus, Sigma, Table2, FileText, BarChart2 } from 'lucide-react';
+import { Type, Heading1, Heading2, Heading3, List, ListOrdered, Minus, Sigma, Table2, FileText, BarChart2, SigmaSquare, Quote, Variable } from 'lucide-react';
 
 const suggestionConfig = {
     char: '/',
@@ -49,6 +49,58 @@ const suggestionConfig = {
                 icon: <List size={16} />,
                 command: ({ editor, range }) => {
                     editor.chain().focus().deleteRange(range).toggleBulletList().run();
+                },
+            },
+            {
+                title: 'Numbered List',
+                description: 'Create a numbered list.',
+                icon: <ListOrdered size={16} />,
+                command: ({ editor, range }) => {
+                    editor.chain().focus().deleteRange(range).toggleOrderedList().run();
+                },
+            },
+            {
+                title: 'Math Equation',
+                description: 'Insert a LaTeX math equation (KaTeX).',
+                icon: <SigmaSquare size={16} />,
+                command: ({ editor, range }) => {
+                    editor.chain().focus().deleteRange(range).insertMathEquation('').run();
+                },
+            },
+            {
+                title: 'Citation',
+                description: 'Insert a citation reference.',
+                icon: <Quote size={16} />,
+                command: ({ editor, range }) => {
+                    editor.chain().focus().deleteRange(range).insertCitation('').run();
+                },
+            },
+            {
+                title: 'Research Table',
+                description: 'Insert a research data table.',
+                icon: <Table2 size={16} />,
+                command: ({ editor, range }) => {
+                    editor.chain().focus().deleteRange(range).run();
+                    window.dispatchEvent(new Event('open-table-modal'));
+                },
+            },
+            {
+                title: 'Comparative Graph',
+                description: 'Insert a comparative graph from tables.',
+                icon: <BarChart2 size={16} />,
+                command: ({ editor, range }) => {
+                    editor.chain().focus().deleteRange(range).run();
+                    window.dispatchEvent(new Event('open-compare-modal'));
+                },
+            },
+            {
+                title: 'Smart Variable',
+                description: 'Insert a variable chip linked to a table cell.',
+                icon: <Variable size={16} />,
+                command: ({ editor, range }) => {
+                    editor.chain().focus().deleteRange(range).insertSmartVariable({
+                        tableId: null, rowIndex: 0, columnName: '', label: 'Variable'
+                    }).run();
                 },
             },
             {

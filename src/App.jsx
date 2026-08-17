@@ -1,11 +1,20 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AppContextProvider } from './context/AppContext';
+import { AppContextProvider, useAppContext } from './context/AppContext';
 import DashboardLayout from './components/DashboardLayout';
 import SignUpPage from './components/SignUpPage';
 import AccountSettingsPage from './components/AccountSettingsPage';
 import MainWorkspace from './components/MainWorkspace';
 import LoginPage from './components/LoginPage';
+
+// Guard that redirects to /login when there is no logged-in user.
+function ProtectedRoute({ children }) {
+  const { user } = useAppContext();
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+}
 
 function App() {
 
@@ -30,10 +39,10 @@ function App() {
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignUpPage />} />
-          <Route path="/dashboard" element={<DashboardLayout />} />
+          <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>} />
           {/* MainWorkspace acts as our project view */}
-          <Route path="/workspace/:projectId" element={<MainWorkspace />} />
-          <Route path="/settings" element={<AccountSettingsPage />} />
+          <Route path="/workspace/:projectId" element={<ProtectedRoute><MainWorkspace /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><AccountSettingsPage /></ProtectedRoute>} />
         </Routes>
       </Router>
     </AppContextProvider>

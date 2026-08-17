@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
     FlaskConical, ChevronDown, ChevronLeft, ChevronRight, Folder, FileText, BarChart2, Option,
-    Settings, Download, Trash2, Cloud, Share, CheckCircle2, Save, Upload,
+    Settings, Download, Trash2, Cloud, CheckCircle2, Save, Upload,
     Clock, Image as ImageIcon, Bold, Italic, Underline as UnderlineIcon, Strikethrough,
     Heading1, Heading2, List, ListOrdered, Quote,
     Subscript as SubscriptIcon, Superscript as SuperscriptIcon,
     MessageSquarePlus
 } from 'lucide-react';
-import ShareModal from './ShareModal';
 import ExportPdfModal from './ExportPdfModal';
 import RightSidebar from './RightSidebar';
 import { useAppContext } from '../context/AppContext';
@@ -27,7 +26,16 @@ import { TextStyle } from '@tiptap/extension-text-style';
 import { FontFamily } from '@tiptap/extension-font-family';
 import { Subscript } from '@tiptap/extension-subscript';
 import { Superscript } from '@tiptap/extension-superscript';
+import Link from '@tiptap/extension-link';
 import CharacterCount from '@tiptap/extension-character-count';
+import { CommentMark } from './CommentMark';
+import EditorBubbleMenu from './EditorBubbleMenu';
+import BlockControls from './BlockControls';
+import { MathEquation } from '../extensions/MathEquation';
+import { SmartVariable } from '../extensions/SmartVariable';
+import { Citation } from '../extensions/Citation';
+import TableTools from './TableTools';
+import Avatar from './Avatar';
 import { CustomTable } from '../extensions/CustomTable';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableHeader } from '@tiptap/extension-table-header';
@@ -39,6 +47,14 @@ import SymbolPickerModal from './SymbolPickerModal';
 import TablePickerModal from './TablePickerModal';
 import GraphExtension from './GraphExtension';
 import SmartSummaryExtension from '../extensions/SmartSummaryExtension';
+import { SemanticError } from '../extensions/SemanticError';
+import SemanticTooltip from './SemanticTooltip';
+import { verifySemantics } from '../api/semantic';
+import { stampDocument, verifyDocument } from '../api/integrity';
+import { saveVersion } from '../api/versions';
+import { saveDocument } from '../api/documents';
+import { ShieldCheck, ShieldAlert, BadgeCheck, History } from 'lucide-react';
+import VersionHistoryModal from './VersionHistoryModal';
 import SvgImportModal from './SvgImportModal';
 import NewProjectModal from './NewProjectModal';
 import ConfirmationModal from './ConfirmationModal';
@@ -92,6 +108,43 @@ const CustomImage = Image.extend({
         return ReactNodeViewRenderer(ResizableImageNode);
     }
 });
+
+// Extract a flat array of row objects from a TipTap table node.
+// Used by the bidirectional flow to re-sync graph data from its source table.
+function extractTableData(tableNode) {
+    const headers = [];
+    const rows = tableNode.content?.content || [];
+    if (rows.length === 0) return [];
+
+    const headerRow = rows[0];
+    if (headerRow.content) {
+        headerRow.content.forEach(cell => {
+            const text = cell.content && cell.content[0] && cell.content[0].content
+                ? cell.content[0].content.map(t => t.text).join('')
+                : '';
+            headers.push(text);
+        });
+    }
+
+    const data = [];
+    for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const rowData = {};
+        if (row.content) {
+            row.content.forEach((cell, cellIndex) => {
+                const text = cell.content && cell.content[0] && cell.content[0].content
+                    ? cell.content[0].content.map(t => t.text).join('')
+                    : '';
+                const header = headers[cellIndex] || `col${cellIndex}`;
+                const num = Number(text);
+                rowData[header] = !isNaN(num) && text !== '' ? num : text;
+            });
+        }
+        data.push(rowData);
+    }
+    return data;
+}
+
 import { useParams, useNavigate } from 'react-router-dom';
 import Papa from 'papaparse';
 
@@ -103,7 +156,6 @@ export default function MainWorkspace() {
         user,
         projects,
         addFileToProject,
-        isShareModalOpen, setIsShareModalOpen,
         isExportModalOpen, setIsExportModalOpen,
         isBidirectionalEnabled,
         setActiveRightPanel,
@@ -114,10 +166,21 @@ export default function MainWorkspace() {
         createNewProject,
         setIsNewProjectModalOpen,
         updateProjectContent,
-        updateFileInProject
+        updateFileInProject,
+        setProjectStamp,
+        setFileStamp
     } = useAppContext();
 
     const [activeFileId, setActiveFileId] = useState(null);
+
+    // Integrity / Data Provenance state
+    const [integrityStatus, setIntegrityStatus] = useState('unstamped'); // 'unstamped' | 'checking' | 'verified' | 'tampered' | 'error'
+    const [integrityMessage, setIntegrityMessage] = useState('');
+    const [isPublishing, setIsPublishing] = useState(false);
+
+    // Version Control (Full Snapshot Strategy)
+    const [isVersionModalOpen, setIsVersionModalOpen] = useState(false);
+    const [lastAutoSaveRef] = React.useState({ current: Date.now() });
 
     // Dynamic CSV States (Phase 5)
     const [tableHeaders, setTableHeaders] = useState([]);
@@ -155,6 +218,10 @@ export default function MainWorkspace() {
 
     // Compare Tables Modal
     const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
+
+    // Semantic Validator (Real-Time Peer Review)
+    const semanticDebounceRef = React.useRef(null);
+    const semanticSeqRef = React.useRef(0);
 
     useEffect(() => {
         const handleOpenTableModal = () => setIsTableModalOpen(true);
@@ -379,9 +446,12 @@ export default function MainWorkspace() {
                 heading: { levels: [1, 2, 3, 4, 5, 6] },
                 dropcursor: { color: '#1A73E8', width: 4 },
                 bulletList: true,
+                orderedList: true,
                 listItem: true,
                 blockquote: true,
-                horizontalRule: true
+                horizontalRule: true,
+                link: false, // configured separately below
+                underline: false, // configured separately below
             }),
             PdfExtension,
             CharacterCount,
@@ -412,8 +482,18 @@ export default function MainWorkspace() {
             FontSize,
             Subscript,
             Superscript,
+            Link.configure({
+                openOnClick: false,
+                autolink: true,
+                HTMLAttributes: { class: 'text-[#1A73E8] underline' },
+            }),
+            CommentMark,
+            MathEquation,
+            SmartVariable,
+            Citation,
             GraphExtension,
             SmartSummaryExtension,
+            SemanticError,
         ],
         content: '', // Start entirely empty (Phase 3 requirements)
         onUpdate: ({ editor }) => {
@@ -480,6 +560,48 @@ export default function MainWorkspace() {
                 }
             });
 
+            // ---- Bidirectional Flow: Table -> Graph ------------------------
+            // 1. Ensure every table has a stable tableId so graphs can link to it.
+            // 2. Re-sync each graphBlock's data from its linked source table.
+            const { tr } = editor.state;
+            let tableIdChanged = false;
+            const tablesById = {};
+
+            editor.state.doc.descendants((node, pos) => {
+                if (node.type.name === 'table') {
+                    let id = node.attrs.tableId;
+                    if (!id) {
+                        id = `tbl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                        tr.setNodeMarkup(pos, undefined, { ...node.attrs, tableId: id });
+                        tableIdChanged = true;
+                    }
+                    tablesById[id] = extractTableData(node);
+                }
+            });
+
+            if (tableIdChanged) {
+                editor.view.dispatch(tr);
+            }
+
+            // Re-sync graph data from linked tables (only when it actually differs).
+            const graphUpdates = [];
+            editor.state.doc.descendants((node, pos) => {
+                if (node.type.name === 'graphBlock' && node.attrs.tableId) {
+                    const sourceData = tablesById[node.attrs.tableId];
+                    if (sourceData && JSON.stringify(sourceData) !== JSON.stringify(node.attrs.data)) {
+                        graphUpdates.push({ pos, data: sourceData });
+                    }
+                }
+            });
+
+            if (graphUpdates.length > 0) {
+                const gtr = editor.state.tr;
+                graphUpdates.forEach(({ pos, data }) => {
+                    gtr.setNodeMarkup(pos, undefined, { ...editor.state.doc.nodeAt(pos).attrs, data });
+                });
+                editor.view.dispatch(gtr);
+            }
+
             // Sync with Global Persistence
             const currProj = activeProjectRef.current;
             const currFileId = activeFileIdRef.current;
@@ -498,6 +620,144 @@ export default function MainWorkspace() {
             },
         },
     });
+
+    // ---- Semantic Validator (Real-Time Peer Review) -----------------------
+    const extractTablesForValidation = React.useCallback((ed) => {
+        const tables = [];
+        ed.state.doc.descendants((node) => {
+            if (node.type.name === 'table') {
+                const headers = [];
+                const rows = [];
+                const content = node.content?.content || [];
+                if (content.length > 0) {
+                    const headerRow = content[0].content?.content || [];
+                    headerRow.forEach(cell => {
+                        headers.push(cell.textContent.trim());
+                    });
+                    for (let i = 1; i < content.length; i++) {
+                        const row = {};
+                        const cells = content[i].content?.content || [];
+                        cells.forEach((cell, idx) => {
+                            const header = headers[idx] || `col${idx}`;
+                            const text = cell.textContent.trim();
+                            const num = Number(text);
+                            row[header] = !isNaN(num) && text !== '' ? num : text;
+                        });
+                        rows.push(row);
+                    }
+                }
+                tables.push({
+                    tableId: node.attrs.tableId || null,
+                    tableName: node.attrs.tableName || 'Table',
+                    headers,
+                    rows,
+                });
+            }
+        });
+        return tables;
+    }, []);
+
+    const clearSemanticErrors = React.useCallback((ed) => {
+        const markType = ed.schema.marks.semanticError;
+        if (!markType) return;
+        const { tr } = ed.state;
+        ed.state.doc.descendants((node, pos) => {
+            if (node.isText && node.marks.some(m => m.type === markType)) {
+                tr.removeMark(pos, pos + node.nodeSize, markType);
+            }
+        });
+        if (tr.docChanged) ed.view.dispatch(tr);
+    }, []);
+
+    const applySemanticError = React.useCallback((ed, match, message) => {
+        const markType = ed.schema.marks.semanticError;
+        if (!markType) return;
+        const { state } = ed;
+        const { from } = state.selection;
+
+        let paraFrom = null, paraTo = null;
+        state.doc.descendants((node, pos) => {
+            if (node.type.name === 'paragraph') {
+                const start = pos + 1;
+                const end = pos + node.nodeSize - 1;
+                if (from >= start && from <= end) {
+                    paraFrom = start;
+                    paraTo = end;
+                }
+            }
+        });
+        if (paraFrom === null) return;
+
+        const paraText = state.doc.textBetween(paraFrom, paraTo, '');
+        const idx = match ? paraText.indexOf(match) : -1;
+        const { tr } = state;
+        if (idx >= 0) {
+            tr.addMark(paraFrom + idx, paraFrom + idx + match.length, markType.create({ message }));
+        } else {
+            tr.addMark(paraFrom, paraTo, markType.create({ message }));
+        }
+        ed.view.dispatch(tr);
+    }, []);
+
+    const computeSignature = React.useCallback((ed) => {
+        const { state } = ed;
+        const { from } = state.selection;
+        let paraText = '';
+        state.doc.descendants((node, pos) => {
+            if (node.type.name === 'paragraph') {
+                const start = pos + 1;
+                const end = pos + node.nodeSize - 1;
+                if (from >= start && from <= end) paraText = node.textContent;
+            }
+        });
+        return paraText + '|' + JSON.stringify(extractTablesForValidation(ed));
+    }, [extractTablesForValidation]);
+
+    const lastSigRef = React.useRef('');
+
+    useEffect(() => {
+        if (!editor) return;
+
+        const runValidation = () => {
+            const seq = ++semanticSeqRef.current;
+            const { state } = editor;
+            const { from } = state.selection;
+            let paraText = '';
+            state.doc.descendants((node, pos) => {
+                if (node.type.name === 'paragraph') {
+                    const start = pos + 1;
+                    const end = pos + node.nodeSize - 1;
+                    if (from >= start && from <= end) paraText = node.textContent;
+                }
+            });
+            if (!paraText.trim()) return;
+
+            const tables = extractTablesForValidation(editor);
+            verifySemantics(paraText, tables).then((result) => {
+                if (seq !== semanticSeqRef.current) return; // stale response
+                clearSemanticErrors(editor);
+                if (result.hasError) {
+                    applySemanticError(editor, result.match, result.errorMessage);
+                }
+            });
+        };
+
+        const schedule = () => {
+            const sig = computeSignature(editor);
+            if (sig === lastSigRef.current) return; // only a mark changed
+            if (semanticDebounceRef.current) clearTimeout(semanticDebounceRef.current);
+            semanticDebounceRef.current = setTimeout(() => {
+                lastSigRef.current = computeSignature(editor);
+                runValidation();
+            }, 1000);
+        };
+
+        editor.on('update', schedule);
+        return () => {
+            editor.off('update', schedule);
+            if (semanticDebounceRef.current) clearTimeout(semanticDebounceRef.current);
+        };
+    }, [editor, extractTablesForValidation, computeSignature, clearSemanticErrors, applySemanticError]);
 
     const handleSwitchFile = React.useCallback((targetFileId) => {
         if (targetFileId === activeFileId) return;
@@ -528,6 +788,156 @@ export default function MainWorkspace() {
             editor.commands.focus('end');
         }
     }, [activeProject?.id, activeFileId, editor, activeProject?.files]); // Dependency on ID is crucial!
+
+    // ---- Integrity / Data Provenance -------------------------------------
+    const extractDocumentPayload = React.useCallback((ed) => {
+        return {
+            document_text: ed.getText(),
+            raw_dataset: extractTablesForValidation(ed),
+        };
+    }, [extractTablesForValidation]);
+
+    const handlePublish = React.useCallback(async () => {
+        if (!editor || !activeProject?.id) return;
+        setIsPublishing(true);
+        const payload = extractDocumentPayload(editor);
+        const result = await stampDocument(payload.document_text, payload.raw_dataset);
+        if (result.stamp) {
+            if (activeFileId) {
+                setFileStamp(activeProject.id, activeFileId, result.stamp);
+            } else {
+                setProjectStamp(activeProject.id, result.stamp);
+            }
+            setIntegrityStatus('verified');
+            setIntegrityMessage('Verified Snapshot: document and dataset stamped at publication.');
+        } else {
+            setIntegrityStatus('error');
+            setIntegrityMessage('Could not reach the integrity service. Is the backend running?');
+        }
+        setIsPublishing(false);
+    }, [editor, activeProject?.id, activeFileId, extractDocumentPayload, setFileStamp, setProjectStamp]);
+
+    // Verify the stored stamp against the current data whenever a document loads.
+    useEffect(() => {
+        if (!editor || !activeProject?.id) return;
+
+        const storedStamp = activeFileId
+            ? (activeProject.files?.find(f => f.id === activeFileId)?.stamp || null)
+            : (activeProject.stamp || null);
+
+        if (!storedStamp) {
+            setIntegrityStatus('unstamped');
+            setIntegrityMessage('');
+            return;
+        }
+
+        setIntegrityStatus('checking');
+        // Wait a tick so the editor content from the load effect is in place.
+        const t = setTimeout(async () => {
+            const payload = extractDocumentPayload(editor);
+            const result = await verifyDocument(payload.document_text, payload.raw_dataset, storedStamp);
+            if (result.valid) {
+                setIntegrityStatus('verified');
+                setIntegrityMessage(result.message);
+            } else {
+                setIntegrityStatus('tampered');
+                setIntegrityMessage(result.message);
+            }
+        }, 50);
+
+        return () => clearTimeout(t);
+    }, [activeProject?.id, activeFileId, editor, activeProject?.files, extractDocumentPayload]);
+
+    // ---- Version Control (Full Snapshot Strategy) -------------------------
+    const currentDocumentId = activeProject?.id
+        ? `${activeProject.id}:${activeFileId || 'main'}`
+        : null;
+
+    const handleSaveVersion = React.useCallback(async (label) => {
+        if (!editor || !currentDocumentId) return;
+        const snapshot = editor.getJSON();
+        const result = await saveVersion(
+            currentDocumentId,
+            snapshot,
+            label,
+            user?.name || 'Researcher'
+        );
+        return result.version;
+    }, [editor, currentDocumentId, user?.name]);
+
+    // Idle auto-save: save a snapshot after 10 minutes of no typing.
+    useEffect(() => {
+        if (!editor || !currentDocumentId) return;
+
+        let idleTimer = null;
+        const resetIdle = () => {
+            if (idleTimer) clearTimeout(idleTimer);
+            idleTimer = setTimeout(() => {
+                const now = Date.now();
+                if (now - lastAutoSaveRef.current >= 10 * 60 * 1000) {
+                    lastAutoSaveRef.current = now;
+                    handleSaveVersion('Auto-save (idle)');
+                }
+            }, 10 * 60 * 1000);
+        };
+
+        editor.on('update', resetIdle);
+        resetIdle();
+        return () => {
+            if (idleTimer) clearTimeout(idleTimer);
+            editor.off('update', resetIdle);
+        };
+    }, [editor, currentDocumentId, handleSaveVersion, lastAutoSaveRef]);
+
+    // Close-tab save: persist a snapshot when the tab is closed/hidden.
+    useEffect(() => {
+        if (!editor || !currentDocumentId) return;
+
+        const handleBeforeUnload = () => {
+            const snapshot = editor.getJSON();
+            // Use sendBeacon for a fire-and-forget save on tab close.
+            const payload = JSON.stringify({
+                document_id: currentDocumentId,
+                snapshot_content: snapshot,
+                label: 'Auto-save (tab close)',
+                author: user?.name || 'Researcher',
+            });
+            if (navigator.sendBeacon) {
+                navigator.sendBeacon('/api/versions', new Blob([payload], { type: 'application/json' }));
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [editor, currentDocumentId, user?.name]);
+
+    // Auto-save: PUT the document every 5 seconds (or after typing stops).
+    useEffect(() => {
+        if (!editor || !currentDocumentId) return;
+
+        let interval = null;
+        let debounce = null;
+
+        const doSave = () => {
+            saveDocument(currentDocumentId, editor.getJSON());
+        };
+
+        // Save every 5 seconds.
+        interval = setInterval(doSave, 5000);
+
+        // Also save shortly after the user stops typing.
+        const onUpdate = () => {
+            if (debounce) clearTimeout(debounce);
+            debounce = setTimeout(doSave, 2000);
+        };
+        editor.on('update', onUpdate);
+
+        return () => {
+            if (interval) clearInterval(interval);
+            if (debounce) clearTimeout(debounce);
+            editor.off('update', onUpdate);
+        };
+    }, [editor, currentDocumentId]);
 
     useEffect(() => {
         if (!editor) return;
@@ -776,11 +1186,7 @@ export default function MainWorkspace() {
                         New Project
                     </button>
                     <a href="/settings" className="h-8 w-8 rounded-full border-2 border-white shadow-sm overflow-hidden shrink-0 block hover:opacity-90 transition-opacity">
-                        <img
-                            src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
-                            alt="User Avatar"
-                            className="h-full w-full object-cover"
-                        />
+                        <Avatar name={user?.name || 'User'} size={32} />
                     </a>
                 </div>
 
@@ -902,20 +1308,15 @@ export default function MainWorkspace() {
                                 <div className="flex items-center">
                                     {activeProject?.collaborators?.length > 0 ? (
                                         <>
-                                            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="Current User" className="w-8 h-8 rounded-full border-2 border-white relative z-20 object-cover" title="You" />
+                                            <Avatar name={user?.name || 'You'} size={32} className="border-2 border-white relative z-20" />
                                             {activeProject.collaborators.map((collab, i) => (
-                                                <img
-                                                    key={i}
-                                                    src={collab.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(collab.name)}&background=random`}
-                                                    alt={collab.name}
-                                                    className="w-8 h-8 rounded-full border-2 border-white -ml-3 relative object-cover"
-                                                    style={{ zIndex: 10 - i }}
-                                                    title={collab.name}
-                                                />
+                                                <span key={i} className="-ml-3 relative" style={{ zIndex: 10 - i }}>
+                                                    <Avatar name={collab.name} size={32} className="border-2 border-white" />
+                                                </span>
                                             ))}
                                         </>
                                     ) : (
-                                        <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="Current User" className="w-8 h-8 rounded-full border-2 border-white relative z-20 object-cover" title="You" />
+                                        <Avatar name={user?.name || 'You'} size={32} className="border-2 border-white relative z-20" />
                                     )}
                                 </div>
 
@@ -926,13 +1327,6 @@ export default function MainWorkspace() {
                                 >
                                     <MessageSquarePlus size={16} />
                                     {isCommentMode ? 'Cancel' : 'Comment'}
-                                </button>
-
-                                <button
-                                    onClick={() => setIsShareModalOpen(true)}
-                                    className="bg-[#B7684C] hover:bg-[#A45C49] text-white px-5 py-2 rounded-full font-bold text-sm shadow-sm transition-colors border-2 border-transparent"
-                                >
-                                    Share
                                 </button>
                             </div>
                         </div>
@@ -968,9 +1362,62 @@ export default function MainWorkspace() {
 
                             {/* Top formatting toolbar was moved to the contextual Properties sidebar */}
 
+                            {/* Integrity / Provenance toolbar */}
+                            <div className="flex items-center justify-between gap-3 mb-4 px-1">
+                                <div className="flex items-center gap-2">
+                                    {integrityStatus === 'verified' && (
+                                        <span className="inline-flex items-center gap-2 bg-green-50 border border-green-300 text-green-800 text-xs font-bold px-3 py-1.5 rounded-full" title={integrityMessage}>
+                                            <ShieldCheck className="w-4 h-4" /> Verified Snapshot
+                                        </span>
+                                    )}
+                                    {integrityStatus === 'tampered' && (
+                                        <span className="inline-flex items-center gap-2 bg-red-50 border border-red-300 text-red-700 text-xs font-bold px-3 py-1.5 rounded-full" title={integrityMessage}>
+                                            <ShieldAlert className="w-4 h-4" /> DATA PROVENANCE FAILED
+                                        </span>
+                                    )}
+                                    {integrityStatus === 'checking' && (
+                                        <span className="inline-flex items-center gap-2 bg-amber-50 border border-amber-300 text-amber-700 text-xs font-bold px-3 py-1.5 rounded-full">
+                                            <span className="animate-spin rounded-full h-3 w-3 border-2 border-amber-600 border-t-transparent" /> Verifying...
+                                        </span>
+                                    )}
+                                    {integrityStatus === 'error' && (
+                                        <span className="inline-flex items-center gap-2 bg-amber-50 border border-amber-300 text-amber-700 text-xs font-bold px-3 py-1.5 rounded-full" title={integrityMessage}>
+                                            <ShieldAlert className="w-4 h-4" /> Integrity service unavailable
+                                        </span>
+                                    )}
+                                    {integrityStatus === 'unstamped' && (
+                                        <span className="inline-flex items-center gap-2 bg-stone-100 border border-stone-300 text-stone-500 text-xs font-bold px-3 py-1.5 rounded-full">
+                                            <ShieldCheck className="w-4 h-4" /> Not published
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setIsVersionModalOpen(true)}
+                                        className="inline-flex items-center gap-2 bg-white border border-[#62414A]/30 text-[#62414A] hover:bg-[#62414A]/10 text-sm font-bold px-4 py-2 rounded-full shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#62414A]/30"
+                                        title="View version history and save snapshots"
+                                    >
+                                        <History className="w-4 h-4" />
+                                        Version History
+                                    </button>
+                                    <button
+                                        onClick={handlePublish}
+                                        disabled={isPublishing}
+                                        className="inline-flex items-center gap-2 bg-[#62414A] hover:bg-[#53353D] disabled:bg-[#62414A]/60 text-white text-sm font-bold px-4 py-2 rounded-full shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#62414A]/50"
+                                    >
+                                        <BadgeCheck className="w-4 h-4" />
+                                        {isPublishing ? 'Stamping...' : 'Finalize / Publish'}
+                                    </button>
+                                </div>
+                            </div>
+
                             {/* Editor Area */}
                             <div className="mb-10 min-h-[500px] h-full relative cursor-text text-lg" onClick={() => editor?.chain()?.focus()?.run()}>
+                                <BlockControls editor={editor} />
                                 <EditorContent editor={editor} key={activeFileId || 'main'} className="h-full" />
+                                <EditorBubbleMenu editor={editor} />
+                                <TableTools editor={editor} />
+                                <SemanticTooltip editor={editor} />
                             </div>
 
                             {isImporting && (
@@ -1030,7 +1477,7 @@ export default function MainWorkspace() {
                                                     {comment.replies && comment.replies.length > 0 ? (
                                                         comment.replies.map(reply => (
                                                             <div key={reply.replyId} className="flex gap-2">
-                                                                <img src={reply.author?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(reply.author?.name || 'User')}&background=random`} alt="" className="w-6 h-6 rounded-full shrink-0" />
+                                                                <Avatar name={reply.author?.name || 'User'} size={24} />
                                                                 <div className="flex flex-col flex-1">
                                                                     <div className="flex items-center gap-2">
                                                                         <span className="text-[11px] font-bold text-gray-800">{reply.author?.name}</span>
@@ -1096,16 +1543,26 @@ export default function MainWorkspace() {
 
             </div>
 
-            {/* Share Modal Overlay */}
-            <ShareModal
-                isOpen={isShareModalOpen}
-                onClose={() => setIsShareModalOpen(false)}
-            />
-
             {/* Export PDF Modal Overlay */}
             <ExportPdfModal
                 isOpen={isExportModalOpen}
                 onClose={() => setIsExportModalOpen(false)}
+                editor={editor}
+                documentName={activeFileId
+                    ? (activeProject?.files?.find(f => f.id === activeFileId)?.name || activeProject?.name || 'Untitled Document')
+                    : (activeProject?.name || 'Untitled Document')}
+            />
+
+            {/* Version History Modal Overlay */}
+            <VersionHistoryModal
+                isOpen={isVersionModalOpen}
+                onClose={() => setIsVersionModalOpen(false)}
+                documentId={currentDocumentId}
+                documentName={activeFileId
+                    ? (activeProject?.files?.find(f => f.id === activeFileId)?.name || activeProject?.name || 'Untitled Document')
+                    : (activeProject?.name || 'Untitled Document')}
+                editor={editor}
+                author={user?.name || 'Researcher'}
             />
 
             {/* Symbol Picker Modal */}

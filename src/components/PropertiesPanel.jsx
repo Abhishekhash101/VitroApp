@@ -225,7 +225,8 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
                 xAxisKey: localX || headers[0],
                 seriesKeys: [localY || headers[1]], // MUST be an array
                 xLabel: localX || headers[0],
-                yLabel: localY || headers[1]
+                yLabel: localY || headers[1],
+                tableId: tableNode.attrs.tableId || null // Link to source table (bidirectional flow)
             }
         }).run();
     };

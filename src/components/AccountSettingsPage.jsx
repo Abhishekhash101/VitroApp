@@ -3,6 +3,7 @@ import {
     FlaskConical, User, Lock, Building, Key, Bell,
     Rocket, MapPin, Mail, Pencil, Building2, Fingerprint, Trash2, Save
 } from 'lucide-react';
+import Avatar from './Avatar';
 
 export default function AccountSettingsPage() {
     return (
@@ -27,11 +28,7 @@ export default function AccountSettingsPage() {
                         <a href="#" className="hover:text-[#62414A] transition-colors">Collaborators</a>
                     </nav>
                     <div className="h-10 w-10 rounded-full border-2 border-white shadow-sm overflow-hidden shrink-0">
-                        <img
-                            src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
-                            alt="User Avatar"
-                            className="h-full w-full object-cover"
-                        />
+                        <Avatar name="Abhishek Kumar" size={40} />
                     </div>
                 </div>
             </div>
@@ -101,11 +98,7 @@ export default function AccountSettingsPage() {
 
                             <div className="relative shrink-0">
                                 <div className="w-28 h-28 rounded-full border-4 border-[#FAF7F5] shadow-md overflow-hidden bg-rose-100">
-                                    <img
-                                        src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
-                                        alt="Abhishek Kumar"
-                                        className="w-full h-full object-cover"
-                                    />
+                                    <Avatar name="Abhishek Kumar" size={112} />
                                 </div>
                                 <button className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-[#62414A] border-2 border-[#FAF7F5] flex items-center justify-center text-white hover:bg-[#53353D] transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-white">
                                     <Pencil size={14} />

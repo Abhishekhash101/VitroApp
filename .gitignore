@@ -22,3 +22,19 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Generated lint output
+eslint-result.json
+
+# Agent / tooling config
+.abacusai/
+
+# Python backend
+backend/.venv/
+backend/__pycache__/
+*.pyc
+__pycache__/
+
+# Backend runtime data
+backend/document_store.json
+backend/version_store.json

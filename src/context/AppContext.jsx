@@ -1,12 +1,37 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 
 const AppContext = createContext();
 
+const USER_KEY = 'vitro_user';
+const PROJECTS_KEY = 'vitro_projects';
+
+function loadJSON(key, fallback) {
+    try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return fallback;
+        return JSON.parse(raw);
+    } catch {
+        return fallback;
+    }
+}
+
 export function AppContextProvider({ children }) {
-    // 1. Mock Authentication State
-    const [user, setUser] = useState(null);
+    // 1. Local Authentication State (persisted to localStorage)
+    const [user, setUser] = useState(() => loadJSON(USER_KEY, null));
+
+    useEffect(() => {
+        if (user) {
+            localStorage.setItem(USER_KEY, JSON.stringify(user));
+        } else {
+            localStorage.removeItem(USER_KEY);
+        }
+    }, [user]);
 
     const login = (userData) => {
+        setUser(userData);
+    };
+
+    const signup = (userData) => {
         setUser(userData);
     };
 
@@ -14,8 +39,12 @@ export function AppContextProvider({ children }) {
         setUser(null);
     };
 
-    // 2. Dynamic Projects State (Starts Empty as per Phase 3)
-    const [projects, setProjects] = useState([]);
+    // 2. Dynamic Projects State (persisted to localStorage)
+    const [projects, setProjects] = useState(() => loadJSON(PROJECTS_KEY, []));
+
+    useEffect(() => {
+        localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+    }, [projects]);
 
     const createNewProject = (customTitle) => {
         const titleToUse = customTitle && customTitle.trim() !== "" ? customTitle : "Untitled Analysis";
@@ -63,17 +92,12 @@ export function AppContextProvider({ children }) {
     };
 
     const updateProjectTitle = (projectId, newTitle) => {
-        console.log("updateProjectTitle called with:", projectId, newTitle);
-        setProjects(prev => {
-            const next = prev.map(p => {
-                if (p.id === projectId) {
-                    return { ...p, name: newTitle };
-                }
-                return p;
-            });
-            console.log("updateProjectTitle next state:", next);
-            return next;
-        });
+        setProjects(prev => prev.map(p => {
+            if (p.id === projectId) {
+                return { ...p, name: newTitle };
+            }
+            return p;
+        }));
     };
 
     const updateProjectContent = (projectId, newContent) => {
@@ -85,9 +109,30 @@ export function AppContextProvider({ children }) {
         }));
     };
 
+    // Integrity stamp storage (Data Provenance)
+    const setProjectStamp = (projectId, stamp) => {
+        setProjects(prev => prev.map(p => {
+            if (p.id === projectId) {
+                return { ...p, stamp, lastModified: Date.now() };
+            }
+            return p;
+        }));
+    };
+
+    const setFileStamp = (projectId, fileId, stamp) => {
+        setProjects(prev => prev.map(p => {
+            if (p.id === projectId) {
+                return {
+                    ...p,
+                    files: p.files.map(f => f.id === fileId ? { ...f, stamp } : f)
+                };
+            }
+            return p;
+        }));
+    };
+
     // 4. Modal and Panel States
     const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
-    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [activeRightPanel, setActiveRightPanel] = useState('properties'); // 'properties', 'settings', 'comments'
 
@@ -100,6 +145,7 @@ export function AppContextProvider({ children }) {
     const value = {
         user,
         login,
+        signup,
         logout,
         projects,
         createNewProject,
@@ -107,14 +153,14 @@ export function AppContextProvider({ children }) {
         addFileToProject,
         isNewProjectModalOpen,
         setIsNewProjectModalOpen,
-        isShareModalOpen,
-        setIsShareModalOpen,
         isExportModalOpen, setIsExportModalOpen,
         isBidirectionalEnabled, setIsBidirectionalEnabled,
         activeRightPanel, setActiveRightPanel,
         updateProjectTitle,
         updateProjectContent,
         updateFileInProject,
+        setProjectStamp,
+        setFileStamp,
         chartData,
         setChartData
     };

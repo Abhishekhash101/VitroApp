@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Edit2, Trash2, CheckCircle, Clock } from 'lucide-react';
+import Avatar from './Avatar';
 
 export default function CommentsPanel({ comments, setComments, editor, user }) {
     const [editingReplyId, setEditingReplyId] = useState(null);
@@ -97,7 +98,7 @@ export default function CommentsPanel({ comments, setComments, editor, user }) {
                                         <div key={reply.replyId} className={`flex flex-col ${!isOriginalPost ? 'ml-3 pl-3 border-l-2 border-gray-100' : ''} group/reply`}>
                                             <div className="flex items-center justify-between mb-1">
                                                 <div className="flex items-center gap-2">
-                                                    <img src={reply.author?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(reply.author?.name || 'User')}&background=random`} alt={reply.author?.name} className="w-5 h-5 rounded-full" />
+                                                    <Avatar name={reply.author?.name || 'User'} size={20} />
                                                     <span className="text-xs font-bold text-[#3E2A2F]">{reply.author?.name || 'Unknown'} {isOriginalPost && <span className="text-[#B7684C] font-normal text-[10px]">(OP)</span>}</span>
                                                     <span className="text-[10px] font-medium text-gray-400 flex items-center gap-1">
                                                         <Clock size={10} /> {reply.timestamp}

@@ -1,7 +1,56 @@
 import React, { useState } from 'react';
-import { FileDown, X, CheckSquare, Square, ChevronDown } from 'lucide-react';
+import { FileDown, X, CheckSquare, Square, ChevronDown, FileCode2 } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import { buildLatexDocument } from '../utils/export';
 
-export default function ExportPdfModal({ isOpen, onClose }) {
+/**
+ * ExportPdfModal
+ * --------------
+ * Generates a real, downloadable PDF from the TipTap editor content
+ * (paragraphs, headings and data tables) using jsPDF.
+ *
+ * Props:
+ *   isOpen       - whether the modal is visible
+ *   onClose      - close handler
+ *   editor       - the TipTap editor instance (optional)
+ *   documentName - the file/project name used as the PDF title
+ */
+
+// Walk the editor JSON and produce a flat list of renderable blocks.
+function buildBlocks(editor) {
+    const blocks = [];
+    const walk = (node) => {
+        if (node.type === 'heading') {
+            const text = node.content?.map(t => t.text || '').join('') || '';
+            if (text.trim()) blocks.push({ type: 'heading', text });
+        } else if (node.type === 'paragraph') {
+            const text = node.content?.map(t => t.text || '').join('') || '';
+            if (text.trim()) blocks.push({ type: 'paragraph', text });
+        } else if (node.type === 'table') {
+            const headers = [];
+            const rows = [];
+            const content = node.content || [];
+            if (content.length > 0) {
+                const headerRow = content[0].content || [];
+                headerRow.forEach(cell => {
+                    headers.push(cell.content?.map(t => t.text || '').join('') || '');
+                });
+                for (let i = 1; i < content.length; i++) {
+                    const cells = content[i].content || [];
+                    const row = cells.map(cell => cell.content?.map(t => t.text || '').join('') || '');
+                    rows.push(row);
+                }
+            }
+            blocks.push({ type: 'table', headers, rows });
+        } else if (node.content) {
+            node.content.forEach(walk);
+        }
+    };
+    if (editor) walk(editor.getJSON());
+    return blocks;
+}
+
+export default function ExportPdfModal({ isOpen, onClose, editor, documentName = 'Untitled Document' }) {
     const [paperSize, setPaperSize] = useState('A4');
     const [citationStyle, setCitationStyle] = useState('APA 7th Edition');
     const [includeRawData, setIncludeRawData] = useState(true);
@@ -11,12 +60,121 @@ export default function ExportPdfModal({ isOpen, onClose }) {
 
     if (!isOpen) return null;
 
+    const handleExportLatex = () => {
+        if (!editor) return;
+        const latex = buildLatexDocument(editor.getJSON(), documentName);
+        const blob = new Blob([latex], { type: 'text/x-tex' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${documentName.replace(/[^a-z0-9]+/gi, '_')}.tex`;
+        a.click();
+        URL.revokeObjectURL(url);
+        onClose();
+    };
+
     const handleExport = () => {
         setIsExporting(true);
+
+        // Defer so the "Generating..." state paints before the heavy work.
         setTimeout(() => {
-            setIsExporting(false);
-            onClose();
-        }, 2000);
+            try {
+                const format = paperSize === 'A4' ? 'a4' : 'letter';
+                const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format });
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const pageHeight = doc.internal.pageSize.getHeight();
+                const margin = 56;
+                const lineHeight = 16;
+                let y = margin;
+
+                const ensureSpace = (needed) => {
+                    if (y + needed > pageHeight - margin) {
+                        doc.addPage();
+                        y = margin;
+                        if (addWatermark) drawWatermark();
+                    }
+                };
+
+                const drawWatermark = () => {
+                    doc.saveGraphicsState();
+                    doc.setGState(new doc.GState({ opacity: 0.08 }));
+                    doc.setTextColor(150);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(60);
+                    doc.text('DRAFT', pageWidth / 2, pageHeight / 2, { angle: 45, align: 'center' });
+                    doc.restoreGraphicsState();
+                };
+
+                // Title
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(18);
+                doc.setTextColor(40);
+                doc.text(documentName, margin, y);
+                y += 28;
+
+                if (addWatermark) drawWatermark();
+
+                const blocks = buildBlocks(editor);
+
+                for (const block of blocks) {
+                    if (block.type === 'heading') {
+                        doc.setFont('helvetica', 'bold');
+                        doc.setFontSize(14);
+                        const lines = doc.splitTextToSize(block.text, pageWidth - margin * 2);
+                        for (const line of lines) {
+                            ensureSpace(lineHeight);
+                            doc.text(line, margin, y);
+                            y += lineHeight;
+                        }
+                        y += 6;
+                    } else if (block.type === 'paragraph') {
+                        doc.setFont('helvetica', 'normal');
+                        doc.setFontSize(11);
+                        const lines = doc.splitTextToSize(block.text, pageWidth - margin * 2);
+                        for (const line of lines) {
+                            ensureSpace(lineHeight);
+                            doc.text(line, margin, y);
+                            y += lineHeight;
+                        }
+                        y += 6;
+                    } else if (block.type === 'table' && includeRawData) {
+                        const headerLine = block.headers.join('  |  ');
+                        doc.setFont('helvetica', 'bold');
+                        doc.setFontSize(10);
+                        const hLines = doc.splitTextToSize(headerLine, pageWidth - margin * 2);
+                        for (const line of hLines) {
+                            ensureSpace(lineHeight);
+                            doc.text(line, margin, y);
+                            y += lineHeight;
+                        }
+                        doc.setFont('helvetica', 'normal');
+                        for (const row of block.rows) {
+                            const rowLine = row.join('  |  ');
+                            const rLines = doc.splitTextToSize(rowLine, pageWidth - margin * 2);
+                            for (const line of rLines) {
+                                ensureSpace(lineHeight);
+                                doc.text(line, margin, y);
+                                y += lineHeight;
+                            }
+                        }
+                        y += 8;
+                    }
+                }
+
+                // Citation footer
+                doc.setFont('helvetica', 'italic');
+                doc.setFontSize(9);
+                doc.setTextColor(120);
+                doc.text(`Generated with VitroApp · Citation: ${citationStyle}`, margin, pageHeight - 30);
+
+                doc.save(`${documentName.replace(/[^a-z0-9]+/gi, '_')}.pdf`);
+            } catch (err) {
+                console.error('PDF export failed:', err);
+            } finally {
+                setIsExporting(false);
+                onClose();
+            }
+        }, 50);
     };
 
     return (
@@ -51,8 +209,8 @@ export default function ExportPdfModal({ isOpen, onClose }) {
                             <FileDown size={20} />
                         </div>
                         <div className="overflow-hidden">
-                            <div className="text-sm font-bold text-[#3E2A2F] truncate">Analysis of Thermodynamic Variance.pdf</div>
-                            <div className="text-xs text-gray-500 font-medium mt-0.5">~1.2 MB</div>
+                            <div className="text-sm font-bold text-[#3E2A2F] truncate">{documentName}.pdf</div>
+                            <div className="text-xs text-gray-500 font-medium mt-0.5">Generated from current editor content</div>
                         </div>
                     </div>
 
@@ -147,13 +305,22 @@ export default function ExportPdfModal({ isOpen, onClose }) {
                     >
                         Cancel
                     </button>
-                    <button
-                        onClick={handleExport}
-                        disabled={isExporting}
-                        className="bg-[#62414A] hover:bg-[#53353D] disabled:bg-[#62414A]/70 text-white px-6 py-2.5 rounded-full text-sm font-bold shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#62414A]/50 focus:ring-offset-2 focus:ring-offset-[#F4EBE1] min-w-[120px] flex justify-center"
-                    >
-                        {isExporting ? "Generating..." : "Export PDF"}
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleExportLatex}
+                            className="inline-flex items-center gap-1.5 text-sm font-bold text-[#62414A] border border-[#62414A]/30 hover:bg-[#62414A]/10 px-4 py-2.5 rounded-full transition-colors focus:outline-none"
+                            title="Export as LaTeX (.tex)"
+                        >
+                            <FileCode2 className="w-4 h-4" /> LaTeX
+                        </button>
+                        <button
+                            onClick={handleExport}
+                            disabled={isExporting}
+                            className="bg-[#62414A] hover:bg-[#53353D] disabled:bg-[#62414A]/70 text-white px-6 py-2.5 rounded-full text-sm font-bold shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#62414A]/50 focus:ring-offset-2 focus:ring-offset-[#F4EBE1] min-w-[120px] flex justify-center"
+                        >
+                            {isExporting ? "Generating..." : "Export PDF"}
+                        </button>
+                    </div>
                 </div>
 
             </div>
