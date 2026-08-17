@@ -17,7 +17,6 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
     const [localRows, setLocalRows] = React.useState(100);
     const [localXLabel, setLocalXLabel] = React.useState('');
     const [localYLabel, setLocalYLabel] = React.useState('');
-    const [localLegends, setLocalLegends] = React.useState([]);
     const [tableHeaders, setTableHeaders] = React.useState([]);
     const [numericColumns, setNumericColumns] = React.useState([]);
     const [selectedStatColumn, setSelectedStatColumn] = React.useState('');
@@ -122,13 +121,15 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
     React.useEffect(() => {
         if (selectionType === 'graph' && editor) {
             const attrs = editor.getAttributes('graphBlock');
-            if (attrs.chartType) setLocalChartType(attrs.chartType);
+            if (attrs.type) setLocalChartType(attrs.type);
             if (attrs.xAxisKey) setLocalX(attrs.xAxisKey);
-            if (attrs.yAxisKey) setLocalY(attrs.yAxisKey);
-            if (attrs.rowLimit) setLocalRows(attrs.rowLimit);
-            if (attrs.xAxisLabel !== undefined) setLocalXLabel(attrs.xAxisLabel);
-            if (attrs.yAxisLabel !== undefined) setLocalYLabel(attrs.yAxisLabel);
-            if (attrs.legends) setLocalLegends(Array.isArray(attrs.legends) ? attrs.legends : []);
+            const keys = Array.isArray(attrs.seriesKeys) ? attrs.seriesKeys : [];
+            if (keys[0]) setLocalY(keys[0]);
+            if (attrs.xLabel !== undefined) setLocalXLabel(attrs.xLabel);
+            if (attrs.yLabel !== undefined) setLocalYLabel(attrs.yLabel);
+            if (Array.isArray(attrs.data) && attrs.data.length > 0) {
+                setTableHeaders(Object.keys(attrs.data[0]).filter(k => k !== '__rowIndex'));
+            }
         }
     }, [selectionType, editor]);
 
@@ -220,7 +221,7 @@ export default function PropertiesPanel({ project, editor, selectionType = 'docu
         editor.chain().focus().insertContentAt(tablePos, {
             type: 'graphBlock',
             attrs: {
-                data: extractedData,
+                data: extractedData.slice(0, Math.max(1, Number(localRows) || extractedData.length)),
                 type: localChartType || 'line',
                 xAxisKey: localX || headers[0],
                 seriesKeys: [localY || headers[1]], // MUST be an array

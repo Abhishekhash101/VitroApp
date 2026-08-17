@@ -1,18 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { NodeViewWrapper } from '@tiptap/react';
-import { AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
+import { AlignLeft, AlignCenter, AlignRight, ImageOff } from 'lucide-react';
 
 export default function ResizableImageNode(props) {
     const { src, alt, title, width: initialWidth, float: initialFloat } = props.node.attrs;
     const [width, setWidth] = useState(initialWidth || '100%');
     const [float, setFloat] = useState(initialFloat || 'none');
     const [isResizing, setIsResizing] = useState(false);
+    const [failedSrc, setFailedSrc] = useState(null);
     const imageRef = useRef(null);
     const startX = useRef(0);
     const startWidth = useRef(0);
+    const loadFailed = failedSrc !== null && failedSrc === src;
 
     const handleMouseDown = (e) => {
         e.preventDefault();
+        if (!imageRef.current) return;
         setIsResizing(true);
         startX.current = e.clientX;
         startWidth.current = imageRef.current.offsetWidth;
@@ -59,14 +62,22 @@ export default function ResizableImageNode(props) {
             }}
         >
             <div className="relative inline-block" style={{ width: width === '100%' ? '100%' : width }}>
-                <img
-                    ref={imageRef}
-                    src={src}
-                    alt={alt}
-                    title={title}
-                    className="max-w-full rounded"
-                    style={{ width: '100%' }}
-                />
+                {loadFailed ? (
+                    <div className="flex items-center gap-2 px-3 py-4 border border-dashed border-gray-300 rounded bg-gray-50 text-xs text-gray-500">
+                        <ImageOff size={16} />
+                        <span>Image data unavailable in this version{alt ? ` (${alt})` : ''}.</span>
+                    </div>
+                ) : (
+                    <img
+                        ref={imageRef}
+                        src={src}
+                        alt={alt}
+                        title={title}
+                        className="max-w-full rounded"
+                        style={{ width: '100%' }}
+                        onError={() => setFailedSrc(src)}
+                    />
+                )}
 
                 {/* Formatting Toolbar */}
                 <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-white border border-gray-200 shadow-lg rounded p-1 flex items-center gap-1 z-50">

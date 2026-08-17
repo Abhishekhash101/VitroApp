@@ -102,3 +102,16 @@ def delete_version(document_id: str, version_id: str) -> bool:
         store["documents"][document_id] = new_versions
         _save_store(store)
         return True
+
+
+def delete_versions_by_project(project_id: str) -> int:
+    """Remove all version snapshots whose document ID belongs to the project."""
+    with _LOCK:
+        store = _load_store()
+        prefix = f"{project_id}:"
+        keys = [k for k in store["documents"] if k.startswith(prefix)]
+        for k in keys:
+            del store["documents"][k]
+        if keys:
+            _save_store(store)
+        return len(keys)

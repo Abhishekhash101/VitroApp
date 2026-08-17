@@ -20,3 +20,13 @@ export async function saveDocument(documentId, content) {
         return null;
     }
 }
+
+export async function getDocument(documentId) {
+    try {
+        const response = await fetch(`${API_BASE}/documents/${encodeURIComponent(documentId)}`);
+        if (!response.ok) return null;
+        return await response.json();
+    } catch {
+        return null;
+    }
+}

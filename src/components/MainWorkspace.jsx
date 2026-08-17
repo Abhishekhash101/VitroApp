@@ -52,7 +52,7 @@ import SemanticTooltip from './SemanticTooltip';
 import { verifySemantics } from '../api/semantic';
 import { stampDocument, verifyDocument } from '../api/integrity';
 import { saveVersion } from '../api/versions';
-import { saveDocument } from '../api/documents';
+import { saveDocument, getDocument } from '../api/documents';
 import { ShieldCheck, ShieldAlert, BadgeCheck, History } from 'lucide-react';
 import VersionHistoryModal from './VersionHistoryModal';
 import SvgImportModal from './SvgImportModal';
@@ -111,35 +111,40 @@ const CustomImage = Image.extend({
 
 // Extract a flat array of row objects from a TipTap table node.
 // Used by the bidirectional flow to re-sync graph data from its source table.
+// NOTE: ProseMirror Fragments are not arrays — `fragment.forEach` yields
+// (node, offset, index) and `fragment[0]` is undefined. Always read cells via
+// `fragment.content` and take their text with `textContent`.
+async function toDurableDataUrl(source) {
+    if (!source) return null;
+    if (typeof source === 'string' && source.startsWith('data:')) return source;
+    const blob = source instanceof Blob ? source : await fetch(source).then(r => r.blob());
+    return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
 function extractTableData(tableNode) {
-    const headers = [];
     const rows = tableNode.content?.content || [];
     if (rows.length === 0) return [];
 
-    const headerRow = rows[0];
-    if (headerRow.content) {
-        headerRow.content.forEach(cell => {
-            const text = cell.content && cell.content[0] && cell.content[0].content
-                ? cell.content[0].content.map(t => t.text).join('')
-                : '';
-            headers.push(text);
-        });
-    }
+    const cellsOf = (row) => row?.content?.content || [];
+    const headers = cellsOf(rows[0]).map((cell, index) => {
+        const text = cell.textContent.trim();
+        return text || `col${index}`;
+    });
 
     const data = [];
     for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
         const rowData = {};
-        if (row.content) {
-            row.content.forEach((cell, cellIndex) => {
-                const text = cell.content && cell.content[0] && cell.content[0].content
-                    ? cell.content[0].content.map(t => t.text).join('')
-                    : '';
-                const header = headers[cellIndex] || `col${cellIndex}`;
-                const num = Number(text);
-                rowData[header] = !isNaN(num) && text !== '' ? num : text;
-            });
-        }
+        cellsOf(rows[i]).forEach((cell, cellIndex) => {
+            const text = cell.textContent.trim();
+            const header = headers[cellIndex] || `col${cellIndex}`;
+            const num = Number(text);
+            rowData[header] = text !== '' && !isNaN(num) ? num : text;
+        });
         data.push(rowData);
     }
     return data;
@@ -778,15 +783,36 @@ export default function MainWorkspace() {
     useEffect(() => {
         if (!editor || !activeProject) return;
 
+        let cancelled = false;
         const targetContent = activeFileId ? (activeProject.files?.find(f => f.id === activeFileId)?.content || "") : (activeProject.content || "");
 
-        // Only update if the editor content is different from the target content
-        // (This prevents cursor jumping loops)
-        const currentContent = editor.getHTML();
-        if (currentContent !== targetContent) {
-            editor.commands.setContent(targetContent, false);
-            editor.commands.focus('end');
+        if (targetContent) {
+            // Only update if the editor content is different from the target content
+            // (This prevents cursor jumping loops)
+            const currentContent = editor.getHTML();
+            if (currentContent !== targetContent) {
+                editor.commands.setContent(targetContent, false);
+                editor.commands.focus('end');
+            }
+        } else {
+            // If the local project cache has no content, try to restore the
+            // latest saved document from the backend document store.
+            const documentId = activeFileId
+                ? `${activeProject.id}:${activeFileId}`
+                : `${activeProject.id}:main`;
+            getDocument(documentId).then((doc) => {
+                if (!doc || cancelled) return;
+                const savedContent = doc.content;
+                if (savedContent) {
+                    editor.commands.setContent(savedContent, false);
+                    editor.commands.focus('end');
+                }
+            });
         }
+
+        return () => {
+            cancelled = true;
+        };
     }, [activeProject?.id, activeFileId, editor, activeProject?.files]); // Dependency on ID is crucial!
 
     // ---- Integrity / Data Provenance -------------------------------------
@@ -962,6 +988,38 @@ export default function MainWorkspace() {
         };
     }, [editor]);
 
+    // Safety net: any image that still ends up with a session-only blob URL is
+    // rewritten to a data URL while that URL is still readable, so saved
+    // documents and version snapshots always carry the image bytes.
+    useEffect(() => {
+        if (!editor) return;
+
+        const embedBlobImages = () => {
+            const pending = [];
+            editor.state.doc.descendants((node, pos) => {
+                if (node.type.name === 'image' && node.attrs.src?.startsWith('blob:')) {
+                    pending.push({ pos, src: node.attrs.src });
+                }
+            });
+            pending.forEach(({ pos, src }) => {
+                toDurableDataUrl(src)
+                    .then((dataUrl) => {
+                        if (!dataUrl) return;
+                        const node = editor.state.doc.nodeAt(pos);
+                        if (!node || node.type.name !== 'image' || node.attrs.src !== src) return;
+                        editor.view.dispatch(
+                            editor.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, src: dataUrl })
+                        );
+                    })
+                    .catch(() => { /* blob already revoked; nothing recoverable */ });
+            });
+        };
+
+        embedBlobImages();
+        editor.on('update', embedBlobImages);
+        return () => editor.off('update', embedBlobImages);
+    }, [editor]);
+
     const handleDragStart = (e, fileObject) => {
         e.dataTransfer.setData('application/json', JSON.stringify(fileObject));
         e.dataTransfer.effectAllowed = 'copy';
@@ -1094,14 +1152,36 @@ export default function MainWorkspace() {
             const fileObject = JSON.parse(data);
 
             if (fileObject.type === 'image/svg+xml') {
-                // fileObject.data might be a data URL or raw text depending on how it was imported
-                const isDataUrl = fileObject.data?.startsWith('data:');
-                const rawSvg = isDataUrl ? atob(fileObject.data.split(',')[1] || '') : fileObject.data;
-                const url = isDataUrl ? fileObject.data : 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(fileObject.data)));
-                setPendingSvg({ url, name: fileObject.name, rawSvg });
-                setIsSvgModalOpen(true);
+                // fileObject.data may be a data URL, a session-only blob URL, or raw text
+                const source = fileObject.data || fileObject.url;
+                const isBlobUrl = typeof source === 'string' && source.startsWith('blob:');
+                if (isBlobUrl) {
+                    toDurableDataUrl(source).then((dataUrl) => {
+                        if (!dataUrl) return;
+                        setPendingSvg({
+                            url: dataUrl,
+                            name: fileObject.name,
+                            rawSvg: atob(dataUrl.split(',')[1] || ''),
+                        });
+                        setIsSvgModalOpen(true);
+                    }).catch(() => setIsImporting(false));
+                } else {
+                    const isDataUrl = source?.startsWith('data:');
+                    const rawSvg = isDataUrl ? atob(source.split(',')[1] || '') : source;
+                    const url = isDataUrl ? source : 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(source)));
+                    setPendingSvg({ url, name: fileObject.name, rawSvg });
+                    setIsSvgModalOpen(true);
+                }
             } else if (fileObject.type.startsWith('image/') && editor) {
-                editor.chain().focus().setImage({ src: fileObject.data }).run();
+                // Never insert a blob URL: it dies with the page session and the
+                // image would be missing after a reload or a version restore.
+                toDurableDataUrl(fileObject.data || fileObject.url)
+                    .then((dataUrl) => {
+                        if (dataUrl && editor) {
+                            editor.chain().focus().setImage({ src: dataUrl }).run();
+                        }
+                    })
+                    .catch((err) => console.error('Could not embed dropped image', err));
             } else if (fileObject.name.endsWith('.csv') || fileObject.type === 'text/csv' || fileObject.name.endsWith('.txt')) {
                 setIsImporting(true);
                 setTimeout(() => {
